@@ -1,7 +1,7 @@
 #include "rabbitsim.h"
 #include "mt19937ar.h"
 
-
+// TO DO the RNG is not well implemented across the threads
 int main()
 {
     /*

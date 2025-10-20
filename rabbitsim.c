@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <omp.h>
-
 #include "rabbitsim.h"
 #include "mt19937ar.h"
 
@@ -113,7 +108,7 @@ void reset_population(s_simulation_instance *sim)
 
 char generate_sex()
 {
-    return (genrand_real1() * 100 <= 50) ? 'M' : 'F';
+    return (genrand_real1() < 0.5) ? 'M' : 'F';
 }
 
 int check_maturity(int age)
@@ -216,7 +211,7 @@ int give_birth(s_simulation_instance *sim, size_t i)
     int nb_new_born = 0;
     if (sim->rabbits[i].pregnant)
     {
-        nb_new_born += 3 + ((int)(genrand_real1() * 100) % 25);
+        nb_new_born += 3 + ((int)(genrand_real1() * 100) / 25);
         sim->rabbits[i].pregnant = 0;
         sim->rabbits[i].nb_litters += 1;
     }
@@ -306,7 +301,8 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation) {
         s_simulation_instance sim_instance = {0};
 
         // CRITICAL: Each thread must seed its own random number generator.
-        init_genrand((unsigned long)omp_get_thread_num());
+        unsigned long seed = (unsigned long)time(NULL) ^ (unsigned long)omp_get_thread_num();
+        init_genrand(seed);
 
         float* tab = simulate(&sim_instance, months, initial_population_nb);
 

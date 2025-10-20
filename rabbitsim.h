@@ -2,6 +2,10 @@
 #define RABBITSIM_H
 
 #include <stddef.h> // for size_t
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <omp.h>
 
 #define INIT_RABIT_CAPACITY 1000000
 #define INIT_SRV_RATE 35
