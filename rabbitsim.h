@@ -47,6 +47,5 @@ void check_pregnancy(size_t i);
 void create_new_generation(int nb_new_born);
 void update_rabbits();
 void simulate(int months, int initial_population_nb);
-void clear_screen(void);
 
 #endif

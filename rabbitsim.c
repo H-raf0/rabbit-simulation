@@ -378,9 +378,3 @@ void simulate(int months, int initial_population_nb)
     printf("\nSimulation finished. dead rabbits: %zu total rabbits alive: %zu\n", dead_rabbit_count, rabbit_count - free_count);
     reset_population();
 }
-
-void clear_screen()
-{
-    printf("\033[2J"); // Clear entire screen
-    printf("\033[H");  // Move cursor to top-left corner
-}
