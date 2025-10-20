@@ -85,7 +85,7 @@ void add_rabbit()
 {
     if (rabbit_count >= MAX_RABBITS)
     {
-        printf("\nMaximum rabbit population reached!\n");
+        printf("\n\nMaximum rabbit population reached!\n\n");
         return;
     }
     s_rabbit *r;
@@ -273,7 +273,7 @@ void update_rabbits(int current_month)
 { // update every month
     float progress = 0.0f;
     int nb_new_born = 0;
-    
+
     for (size_t i = 0; i < rabbit_count; ++i)
     {
         s_rabbit *r = &rabbits[i];
@@ -291,7 +291,8 @@ void update_rabbits(int current_month)
         // printf(" rabbit %zu: age %d, survival_rate %d%%\n", i, r->age, r->survival_rate < 0 ? -r->survival_rate : r->survival_rate);
 
         // to print the progress of the calculations
-        if (i % ((rabbit_count - free_count) / 100) == 0 || i == rabbit_count-1)
+        //printf("\n\n%d\n\n", rabbit_count - free_count);
+        if (i % (rabbit_count / 100) == 0 || i == rabbit_count - 1)
         {
             // transforme i to a percentage and prints it
             progress = (float)i * 100.0f / (float)rabbit_count;
@@ -301,16 +302,16 @@ void update_rabbits(int current_month)
     }
     printf("\n");
     create_new_generation(nb_new_born);
-    //printf("\rSimulating month %3d : 100.00 %%", current_month + 1);
+    // printf("\rSimulating month %3d : 100.00 %%", current_month + 1);
 }
 
 void simulate(int months, int initial_population_nb)
 {
     printf("Initializing starting population with %d rabbits...\n", initial_population_nb);
-    
+
     init_population();
     init_starting_population(initial_population_nb); // Start with initial_population_nb rabbits
-    
+
     printf("Starting population initialized. Total rabbits: %zu\n", rabbit_count);
 
     for (int current_month = 0; current_month < months; ++current_month)
@@ -323,7 +324,7 @@ void simulate(int months, int initial_population_nb)
         update_rabbits(current_month);
         // clear_screen();
     }
-
+    
     printf("\nSimulation finished. dead rabbits: %zu total rabbits alive: %zu\n", dead_rabbit_count, rabbit_count - free_count);
     reset_population();
 }
