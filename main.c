@@ -3,7 +3,7 @@
 
 
 
-// TO DO: size_t is not good probably
+// TO DO: realloc when max hitted
 
 int main()
 {
@@ -16,6 +16,6 @@ int main()
     // printf("Number of generations :");scanf("%d", &generations);
     // printf(fibonacci(generations));
 
-    simulate(240, 10000);
+    simulate(240, 100000);
     return 0;
 }

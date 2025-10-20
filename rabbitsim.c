@@ -7,7 +7,8 @@
 s_rabbit *rabbits = NULL;
 size_t rabbit_count = 0;
 size_t dead_rabbit_count = 0;
-int free_indices[MAX_RABBITS];
+size_t rabbit_capacity = 0;
+int *free_indices;
 size_t free_count = 0;
 
 /*
@@ -39,33 +40,80 @@ int fibonacci(int n)
 |------------------------------------------------------------------------------|
 */
 
+/*
 void init_population()
 {
-    rabbits = malloc(sizeof(s_rabbit) * MAX_RABBITS);
+    rabbits = malloc(sizeof(s_rabbit) * rabbit_capacity);
     if (!rabbits)
     {
         fprintf(stderr, "Allocation failed\n");
         exit(EXIT_FAILURE);
     }
+
+    free_indices = malloc(sizeof(s_rabbit) * rabbit_capacity);
+    if (!free_indices)
+    {
+        fprintf(stderr, "Allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+}
+*/
+int ensure_capacity()
+{
+    // This check is now correct because capacity starts at 0
+    if (rabbit_count < rabbit_capacity)
+    {
+        return 1;
+    }
+
+    size_t new_capacity = (rabbit_capacity == 0) ? INIT_RABIT_CAPACITY : rabbit_capacity * 2;
+    printf("\n--- Resizing memory from %zu to %zu ---\n", rabbit_capacity, new_capacity);
+    fflush(stdout);
+
+    // Reallocate rabbits array
+    s_rabbit *temp_rabbits = realloc(rabbits, sizeof(s_rabbit) * new_capacity);
+    if (temp_rabbits == NULL)
+    {
+        printf("\n--- MEMORY REALLOCATION FAILED (rabbits)! ---\n");
+        return 0;
+    }
+    rabbits = temp_rabbits;
+
+    // Reallocate free_indices array
+    int *temp_indices = realloc(free_indices, sizeof(int) * new_capacity);
+    if (temp_indices == NULL)
+    {
+        printf("\n--- MEMORY REALLOCATION FAILED (free_indices)! ---\n");
+        // We have a problem: rabbits was reallocated but indices was not.
+        // For this simulation, we can exit, but in a real app, you'd need error handling.
+        return 0; 
+    }
+    free_indices = temp_indices;
+    
+    // Success! Update the capacity.
+    rabbit_capacity = new_capacity;
+    return 1;
+}
+
+// add 2 healthy mature strong rabbits
+void init_2_super_rabbits()
+{
+    add_rabbit();
+    add_rabbit();
+    rabbits[0].sex = 'M';
+    rabbits[0].mature = 1;
+    rabbits[0].survival_rate = 100;
+    rabbits[1].sex = 'F';
+    rabbits[1].mature = 1;
+    rabbits[1].survival_rate = 100;
+    return;
 }
 
 void init_starting_population(int nb_rabbits)
 {
     if (rabbits == NULL)
     {
-        init_population();
-    }
-    if (nb_rabbits == 2)
-    {
-        add_rabbit();
-        add_rabbit();
-        rabbits[0].sex = 'M';
-        rabbits[0].mature = 1;
-        rabbits[0].survival_rate = 100;
-        rabbits[1].sex = 'F';
-        rabbits[1].mature = 1;
-        rabbits[1].survival_rate = 100;
-        return;
+        ensure_capacity();
     }
     for (int i = 0; i < nb_rabbits; ++i)
     {
@@ -79,13 +127,17 @@ void reset_population()
     rabbits = NULL;
     rabbit_count = 0;
     free_count = 0;
+
+    free(free_indices);
+    free_indices = NULL;
+    rabbit_count = 0;
+    free_count = 0;
 }
 
 void add_rabbit()
 {
-    if (rabbit_count >= MAX_RABBITS)
+    if (!ensure_capacity())
     {
-        printf("\n\nMaximum rabbit population reached!\n\n");
         return;
     }
     s_rabbit *r;
@@ -245,7 +297,7 @@ int give_birth(size_t i)
     int nb_new_born = 0;
     if (rabbits[i].pregnant)
     {
-        int nb_kittens = 3 + ((int)(genrand_real1()*100) % 25); // 3 to 6 kittens // not that good
+        int nb_kittens = 3 + ((int)(genrand_real1() * 100) % 25); // 3 to 6 kittens // not that good
         nb_new_born += nb_kittens;
         rabbits[i].pregnant = 0;    // reset pregnancy
         rabbits[i].nb_litters += 1; // increment litters count
@@ -283,11 +335,11 @@ void update_rabbits()
 
         update_maturity(i);
         update_litters_per_year(i);
-        update_survival_rate(i); 
+        update_survival_rate(i);
         check_survival(i);
         nb_new_born += give_birth(i);
         check_pregnancy(i);
-        //printf(" rabbit %zu: age %d, survival_rate %d%%\n", i, r->age, r->survival_rate < 0 ? -r->survival_rate : r->survival_rate);
+        // printf(" rabbit %zu: age %d, survival_rate %d%%\n", i, r->age, r->survival_rate < 0 ? -r->survival_rate : r->survival_rate);
     }
     create_new_generation(nb_new_born);
     // printf("\rSimulating month %3d : 100.00 %%", current_month + 1);
@@ -297,9 +349,18 @@ void simulate(int months, int initial_population_nb)
 {
     printf("Initializing starting population with %d rabbits...\n", initial_population_nb);
 
-    init_population();
-    init_starting_population(initial_population_nb); // Start with initial_population_nb rabbits
-
+    if (!ensure_capacity())
+    {
+        return;
+    }
+    if (initial_population_nb == 2)
+    {
+        init_2_super_rabbits();
+    }
+    else
+    {
+        init_starting_population(initial_population_nb); // Start with initial_population_nb rabbits
+    }
     printf("Starting population initialized. Total rabbits: %zu\n", rabbit_count);
 
     for (int current_month = 0; current_month < months; ++current_month)
@@ -313,7 +374,7 @@ void simulate(int months, int initial_population_nb)
         printf("\rSimulating month %3d / %3d", current_month + 1, months);
         // clear_screen();
     }
-    
+
     printf("\nSimulation finished. dead rabbits: %zu total rabbits alive: %zu\n", dead_rabbit_count, rabbit_count - free_count);
     reset_population();
 }

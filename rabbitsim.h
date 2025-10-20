@@ -3,7 +3,7 @@
 
 #include <stddef.h> // for size_t
 
-#define MAX_RABBITS 30000000
+#define INIT_RABIT_CAPACITY 1000000
 #define INIT_SRV_RATE 35
 
 typedef struct rabbit {
@@ -21,13 +21,14 @@ typedef struct rabbit {
 extern s_rabbit *rabbits;
 extern size_t rabbit_count;
 extern int current_month;
-extern int free_indices[MAX_RABBITS];
+extern size_t rabbit_capacity;
+extern int *free_indices;
 extern size_t free_count;
 
 // --- function prototypes ---
 int fibonacci(int n);
 
-void init_population(void);
+int ensure_capacity(void);
 void init_starting_population(int nb_rabbits);
 void reset_population(void);
 void add_rabbit(void);
