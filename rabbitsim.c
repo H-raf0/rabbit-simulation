@@ -108,7 +108,7 @@ void add_rabbit()
     r->pregnant = 0;
     r->nb_litters_y = 0;
     r->nb_litters = 0;
-    r->survival_rate = 35; // initial survival rate
+    r->survival_rate = INIT_SRV_RATE; // initial survival rate
 }
 
 char generate_sex()
@@ -245,7 +245,7 @@ int give_birth(size_t i)
     int nb_new_born = 0;
     if (rabbits[i].pregnant)
     {
-        int nb_kittens = 3 + (genrand_int31() % 4); // 3 to 6 kittens
+        int nb_kittens = 3 + ((int)(genrand_real1()*100) % 25); // 3 to 6 kittens // not that good
         nb_new_born += nb_kittens;
         rabbits[i].pregnant = 0;    // reset pregnancy
         rabbits[i].nb_litters += 1; // increment litters count
@@ -269,9 +269,8 @@ void create_new_generation(int nb_new_born)
     }
 }
 
-void update_rabbits(int current_month)
+void update_rabbits()
 { // update every month
-    float progress = 0.0f;
     int nb_new_born = 0;
 
     for (size_t i = 0; i < rabbit_count; ++i)
@@ -284,23 +283,12 @@ void update_rabbits(int current_month)
 
         update_maturity(i);
         update_litters_per_year(i);
-        update_survival_rate(i);
+        update_survival_rate(i); 
         check_survival(i);
         nb_new_born += give_birth(i);
         check_pregnancy(i);
-        // printf(" rabbit %zu: age %d, survival_rate %d%%\n", i, r->age, r->survival_rate < 0 ? -r->survival_rate : r->survival_rate);
-
-        // to print the progress of the calculations
-        //printf("\n\n%d\n\n", rabbit_count - free_count);
-        if (i % (rabbit_count / 100) == 0 || i == rabbit_count - 1)
-        {
-            // transforme i to a percentage and prints it
-            progress = (float)i * 100.0f / (float)rabbit_count;
-            printf("\rSimulating month %3d : %3.2f %%", current_month + 1, progress);
-            fflush(stdout);
-        }
+        //printf(" rabbit %zu: age %d, survival_rate %d%%\n", i, r->age, r->survival_rate < 0 ? -r->survival_rate : r->survival_rate);
     }
-    printf("\n");
     create_new_generation(nb_new_born);
     // printf("\rSimulating month %3d : 100.00 %%", current_month + 1);
 }
@@ -318,10 +306,11 @@ void simulate(int months, int initial_population_nb)
     {
         if (free_count == rabbit_count)
         {
-            printf("\nall population is dead at the month %d / %d \n", current_month + 1, months);
+            printf("\rall population is dead at the month %d / %d \n", current_month + 1, months);
             break;
         }
-        update_rabbits(current_month);
+        update_rabbits();
+        printf("\rSimulating month %3d / %3d", current_month + 1, months);
         // clear_screen();
     }
     
