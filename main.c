@@ -2,9 +2,6 @@
 #include "mt19937ar.h"
 
 
-
-// TO DO: realloc when max hitted
-
 int main()
 {
     /*
