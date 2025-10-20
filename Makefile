@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -g
+CFLAGS = -O3 -Wall -Wextra -std=c11 -g
 SRC = main.c mt19937ar.c rabbitsim.c
 OBJ = $(SRC:.c=.o)
 DEPS = mt19937ar.h rabbitsim.h

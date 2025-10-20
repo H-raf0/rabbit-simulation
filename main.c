@@ -17,6 +17,6 @@ int main()
     // printf(fibonacci(generations));
 
     //simulate(240, 100000);
-    multi_simulate(240, 10000, 10);
+    multi_simulate(240, 10000, 100);
     return 0;
 }

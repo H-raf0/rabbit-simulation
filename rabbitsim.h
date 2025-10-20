@@ -5,7 +5,21 @@
 
 #define INIT_RABIT_CAPACITY 1000000
 #define INIT_SRV_RATE 35
-#define PRINT_OUTPUT 1
+
+// --- START: NEW MACRO DEFINITION ---
+
+// Set PRINT_OUTPUT to 1 to see all simulation steps, or 0 to hide them.
+#define PRINT_OUTPUT 0
+
+#if defined(PRINT_OUTPUT) && PRINT_OUTPUT != 0
+    // If PRINT_OUTPUT is 1, our macro becomes a printf call followed by a flush.
+    #define LOG_PRINT(format, ...) do { printf(format, ##__VA_ARGS__); fflush(stdout); } while (0)
+#else
+    // If PRINT_OUTPUT is 0, our macro does absolutely nothing.
+    #define LOG_PRINT(format, ...) do { } while (0)
+#endif
+
+// --- END: NEW MACRO DEFINITION ---
 
 typedef struct rabbit {
     char sex;
