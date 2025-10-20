@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include "rabbitsim.h"
 #include "mt19937ar.h"
@@ -67,14 +68,14 @@ int ensure_capacity()
     }
 
     size_t new_capacity = (rabbit_capacity == 0) ? INIT_RABIT_CAPACITY : rabbit_capacity * 2;
-    printf("\n--- Resizing memory from %zu to %zu ---\n", rabbit_capacity, new_capacity);
+    printf("    Resizing memory from %zu to %zu\n", rabbit_capacity, new_capacity);
     fflush(stdout);
 
     // Reallocate rabbits array
     s_rabbit *temp_rabbits = realloc(rabbits, sizeof(s_rabbit) * new_capacity);
     if (temp_rabbits == NULL)
     {
-        printf("\n--- MEMORY REALLOCATION FAILED (rabbits)! ---\n");
+        printf("\n    MEMORY REALLOCATION FAILED (rabbits)!\n");
         return 0;
     }
     rabbits = temp_rabbits;
@@ -83,7 +84,7 @@ int ensure_capacity()
     int *temp_indices = realloc(free_indices, sizeof(int) * new_capacity);
     if (temp_indices == NULL)
     {
-        printf("\n--- MEMORY REALLOCATION FAILED (free_indices)! ---\n");
+        printf("\n    MEMORY REALLOCATION FAILED (free_indices)!\n");
         // We have a problem: rabbits was reallocated but indices was not.
         // For this simulation, we can exit, but in a real app, you'd need error handling.
         return 0; 
@@ -118,7 +119,15 @@ void init_starting_population(int nb_rabbits)
     for (int i = 0; i < nb_rabbits; ++i)
     {
         add_rabbit();
+
+        if ((i + 1) % 100 == 0 || (i + 1) == nb_rabbits)
+        {
+            float progress = (float)(i + 1) * 100.0f / nb_rabbits;
+            printf("\r    Initializing population: %3.0f%%", progress);
+            fflush(stdout);
+        }
     }
+    printf("\n");
 }
 
 void reset_population()
@@ -132,6 +141,8 @@ void reset_population()
     free_indices = NULL;
     rabbit_count = 0;
     free_count = 0;
+
+    rabbit_capacity = 0;
 }
 
 void add_rabbit()
@@ -339,19 +350,17 @@ void update_rabbits()
         check_survival(i);
         nb_new_born += give_birth(i);
         check_pregnancy(i);
-        // printf(" rabbit %zu: age %d, survival_rate %d%%\n", i, r->age, r->survival_rate < 0 ? -r->survival_rate : r->survival_rate);
     }
     create_new_generation(nb_new_born);
-    // printf("\rSimulating month %3d : 100.00 %%", current_month + 1);
 }
 
-void simulate(int months, int initial_population_nb)
+float* simulate(int months, int initial_population_nb)
 {
-    printf("Initializing starting population with %d rabbits...\n", initial_population_nb);
-
+    printf("    Initializing starting population with %d rabbits...\n", initial_population_nb);
+    fflush(stdout);
     if (!ensure_capacity())
     {
-        return;
+        exit(EXIT_FAILURE);
     }
     if (initial_population_nb == 2)
     {
@@ -361,20 +370,59 @@ void simulate(int months, int initial_population_nb)
     {
         init_starting_population(initial_population_nb); // Start with initial_population_nb rabbits
     }
-    printf("Starting population initialized. Total rabbits: %zu\n", rabbit_count);
+    printf("    Starting population initialized. Total rabbits: %zu\n", rabbit_count);
 
     for (int current_month = 0; current_month < months; ++current_month)
     {
         if (free_count == rabbit_count)
         {
-            printf("\rall population is dead at the month %d / %d \n", current_month + 1, months);
+            printf("\r    all population is dead at the month %d / %d \n", current_month + 1, months);
             break;
         }
         update_rabbits();
-        printf("\rSimulating month %3d / %3d", current_month + 1, months);
+        printf("\r    Simulating month %3d / %3d", current_month + 1, months);
         // clear_screen();
     }
-
-    printf("\nSimulation finished. dead rabbits: %zu total rabbits alive: %zu\n", dead_rabbit_count, rabbit_count - free_count);
+    int alive_rabbits_count = rabbit_count - free_count;
+    printf("\n    Simulation finished :\n");
     reset_population();
+
+    return stock_data(2, (double)dead_rabbit_count, (double)alive_rabbits_count);
+}
+
+float* stock_data(int count, ...) {
+    float* arr = malloc(count * sizeof(float));
+    if (!arr) return NULL;
+
+    va_list args;
+    va_start(args, count);
+    for (int i = 0; i < count; i++)
+        arr[i] = (float)va_arg(args, double);  // works for int, float, or double
+    va_end(args);
+
+    return arr;
+}
+
+void multi_simulate(int months, int initial_population_nb, int nb_simulation) {
+    float* tab;
+    float population = 0, deadRabbits = 0;
+
+    for (int i = 0; i < nb_simulation; i++) {
+        printf("\n\n--> simulation number %d\n", i + 1);
+        tab = simulate(months, initial_population_nb);
+
+        // print results of each simulation in the output.txt file
+        printf("\n    results:\n        dead rabbits : %.2f\n        alive population : %.2f\n",tab[0], tab[1]);
+
+        population += tab[0];
+        deadRabbits += tab[1];
+        free(tab); // verifie that the tab is freed
+    }
+
+    float avg_alive_population = population / (float)nb_simulation;  // is the 2nd float neccessary?
+    float avg_dead_rabbits = deadRabbits / (float)nb_simulation;
+
+    printf("\n\n>the average<\ninput:\n   start number: %d\n   months : %d\n   number of simulations : %d\nresults:\n   average alive population : %.2f\n"
+        "   average dead rabbits : %.2f\n",
+        initial_population_nb, months, nb_simulation, avg_alive_population, avg_dead_rabbits);
 }

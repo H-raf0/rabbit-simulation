@@ -5,6 +5,7 @@
 
 #define INIT_RABIT_CAPACITY 1000000
 #define INIT_SRV_RATE 35
+#define PRINT_OUTPUT 1
 
 typedef struct rabbit {
     char sex;
@@ -46,6 +47,8 @@ int give_birth(size_t i);
 void check_pregnancy(size_t i);
 void create_new_generation(int nb_new_born);
 void update_rabbits();
-void simulate(int months, int initial_population_nb);
+float* simulate(int months, int initial_population_nb);
+float* stock_data(int count, ...);
+void multi_simulate(int months, int initial_population_nb, int nb_simulation);
 
 #endif
