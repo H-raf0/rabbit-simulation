@@ -3,7 +3,7 @@
 
 #include <stddef.h> // for size_t
 
-#define MAX_RABBITS 10000000
+#define MAX_RABBITS 100000
 
 typedef struct rabbit {
     char sex;
@@ -39,9 +39,11 @@ void update_survival_rate(size_t i);
 void kill_rabbit(size_t i);
 int generate_litters_per_year(void);
 void update_litters_per_year(size_t i);
-int can_give_birth_this_month(size_t i);
-void give_birth(size_t i);
-void update_rabbits(void);
+int can_be_pregnant_this_month(size_t i);
+int give_birth(size_t i);
+void check_pregnancy(size_t i);
+void create_new_generation(int nb_new_born);
+void update_rabbits(int current_month);
 void simulate(int months, int initial_population_nb);
 void clear_screen(void);
 

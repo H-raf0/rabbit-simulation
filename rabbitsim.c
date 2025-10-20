@@ -7,7 +7,6 @@
 s_rabbit *rabbits = NULL;
 size_t rabbit_count = 0;
 size_t dead_rabbit_count = 0;
-int current_month = 0;
 int free_indices[MAX_RABBITS];
 size_t free_count = 0;
 
@@ -52,7 +51,6 @@ void init_population()
 
 void init_starting_population(int nb_rabbits)
 {
-    printf("Initializing starting population with %d rabbits...\n", nb_rabbits);
     if (rabbits == NULL)
     {
         init_population();
@@ -73,7 +71,6 @@ void init_starting_population(int nb_rabbits)
     {
         add_rabbit();
     }
-    printf("Starting population initialized. Total rabbits: %zu\n", rabbit_count);
 }
 
 void reset_population()
@@ -87,8 +84,10 @@ void reset_population()
 void add_rabbit()
 {
     if (rabbit_count >= MAX_RABBITS)
+    {
+        printf("\nMaximum rabbit population reached!\n");
         return;
-
+    }
     s_rabbit *r;
 
     if (free_count > 0)
@@ -215,7 +214,7 @@ void update_litters_per_year(size_t i)
     }
 }
 
-int can_give_birth_this_month(size_t i)
+int can_be_pregnant_this_month(size_t i)
 {
     int remaining_months = 12 - (rabbits[i].age - rabbits[i].maturity_age) % 12 + 1;
     int remaining_litters = rabbits[i].nb_litters_y - rabbits[i].nb_litters;
@@ -241,45 +240,41 @@ int can_give_birth_this_month(size_t i)
     return 0;
 }
 
-void give_birth(size_t i)
+int give_birth(size_t i)
 {
-    if (rabbits[i].sex == 'F' && rabbits[i].mature)
+    int nb_new_born = 0;
+    if (rabbits[i].pregnant)
     {
-        if (!rabbits[i].pregnant)
-        {
-            if (can_give_birth_this_month(i))
-            {
-                rabbits[i].pregnant = 1;
-            }
-        }
-        else
-        {
-            int nb_kittens = 3 + (genrand_int31() % 4); // 3 to 6 kittens
-            for (int j = 0; j < nb_kittens; ++j)
-            {
-                if (rabbit_count < MAX_RABBITS)
-                {
-                    add_rabbit(); // add new rabbit
-                }
-                else
-                {
-                    fprintf(stderr, "Max rabbit count reached\n");
-                    break;
-                }
-            }
-            rabbits[i].pregnant = 0;    // reset pregnancy
-            rabbits[i].nb_litters += 1; // increment litters count
-            give_birth(i);
-        }
+        int nb_kittens = 3 + (genrand_int31() % 4); // 3 to 6 kittens
+        nb_new_born += nb_kittens;
+        rabbits[i].pregnant = 0;    // reset pregnancy
+        rabbits[i].nb_litters += 1; // increment litters count
+    }
+    return nb_new_born;
+}
+
+void check_pregnancy(size_t i)
+{
+    if (rabbits[i].sex == 'F' && can_be_pregnant_this_month(i))
+    {
+        rabbits[i].pregnant = 1;
     }
 }
 
-void update_rabbits()
+void create_new_generation(int nb_new_born)
+{
+    for (int j = 0; j < nb_new_born; ++j)
+    {
+        add_rabbit();
+    }
+}
+
+void update_rabbits(int current_month)
 { // update every month
     float progress = 0.0f;
+    int nb_new_born = 0;
     
-    size_t total_this_month = rabbit_count;
-    for (size_t i = 0; i < total_this_month; ++i)
+    for (size_t i = 0; i < rabbit_count; ++i)
     {
         s_rabbit *r = &rabbits[i];
         if (r->status == 0)
@@ -291,35 +286,41 @@ void update_rabbits()
         update_litters_per_year(i);
         update_survival_rate(i);
         check_survival(i);
-        give_birth(i);
+        nb_new_born += give_birth(i);
+        check_pregnancy(i);
         // printf(" rabbit %zu: age %d, survival_rate %d%%\n", i, r->age, r->survival_rate < 0 ? -r->survival_rate : r->survival_rate);
 
         // to print the progress of the calculations
-        if (i % 1000 == 0 && i != 0)
+        if (i % ((rabbit_count - free_count) / 100) == 0 || i == rabbit_count-1)
         {
-
             // transforme i to a percentage and prints it
-            progress = (float)i * 100.0f / (float)total_this_month;
-            printf("month %d :  progress : %.2f %%\r", current_month, progress);
-            // printf("progress : %.2f %%\r", progress);
+            progress = (float)i * 100.0f / (float)rabbit_count;
+            printf("\rSimulating month %3d : %3.2f %%", current_month + 1, progress);
+            fflush(stdout);
         }
     }
+    printf("\n");
+    create_new_generation(nb_new_born);
+    //printf("\rSimulating month %3d : 100.00 %%", current_month + 1);
 }
 
 void simulate(int months, int initial_population_nb)
 {
+    printf("Initializing starting population with %d rabbits...\n", initial_population_nb);
+    
     init_population();
     init_starting_population(initial_population_nb); // Start with initial_population_nb rabbits
+    
+    printf("Starting population initialized. Total rabbits: %zu\n", rabbit_count);
 
-    for (current_month = 0; current_month < months; ++current_month)
+    for (int current_month = 0; current_month < months; ++current_month)
     {
-        printf("Simulating month %d \n", current_month + 1); // rm \n later for progress bar
         if (free_count == rabbit_count)
         {
             printf("\nall population is dead at the month %d / %d \n", current_month + 1, months);
             break;
         }
-        update_rabbits();
+        update_rabbits(current_month);
         // clear_screen();
     }
 

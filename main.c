@@ -16,6 +16,6 @@ int main()
     // printf("Number of generations :");scanf("%d", &generations);
     // printf(fibonacci(generations));
 
-    simulate(120, 1000000);
+    simulate(120, 10000);
     return 0;
 }
