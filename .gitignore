@@ -8,3 +8,6 @@ mt19937ar.o
 r_un.cmd
 rabbitsim.o
 sim.exe
+sim
+pcg_basic.o
+*.o

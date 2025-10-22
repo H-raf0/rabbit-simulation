@@ -1,9 +1,9 @@
 CC = gcc
 # -03 aggressive optimisation, -fopenmp to use <omp.h> (parrallel prossecing)
 CFLAGS = -O3 -fopenmp -Wall -Wextra -std=c11 -g
-SRC = main.c mt19937ar.c rabbitsim.c
+SRC = main.c pcg_basic.c rabbitsim.c
 OBJ = $(SRC:.c=.o)
-DEPS = mt19937ar.h rabbitsim.h
+DEPS = pcg_basic.h rabbitsim.h
 EXEC = sim
 
 all: $(EXEC)
