@@ -46,7 +46,12 @@ int generate_sex(pcg32_random_t *rng)
     return (genrand_real(rng) < 0.5) ? 0 : 1;
 }
 
-void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, int init_srv_rate)
+// ?
+int generate_random_age(pcg32_random_t *rng){
+    return (int)(genrand_real(rng)*10) + 10;
+}
+
+void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, float init_srv_rate, int age)
 {
     if (!ensure_capacity(sim))
         return;
@@ -63,19 +68,20 @@ void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, 
 
     r->sex = generate_sex(rng);
     r->status = 1;
-    r->age = 0;
+    r->age = age;
     r->mature = is_mature;
     r->maturity_age = 0;
     r->pregnant = 0;
     r->nb_litters_y = 0;
     r->nb_litters = 0;
     r->survival_rate = init_srv_rate;
+    r->survival_check_flag = 0;
 }
 
 void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
 {
-    add_rabbit(sim, rng, 1, 100);
-    add_rabbit(sim, rng, 1, 100);
+    add_rabbit(sim, rng, 1, 100, 9);
+    add_rabbit(sim, rng, 1, 100, 9);
     sim->rabbits[0].sex = 0;
     sim->rabbits[1].sex = 1;
 }
@@ -84,7 +90,7 @@ void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_
 {
     for (int i = 0; i < nb_rabbits; ++i)
     {
-        add_rabbit(sim, rng, 1, ADULT_SRV_RATE);
+        add_rabbit(sim, rng, 1, ADULT_SRV_RATE, generate_random_age(rng));
     }
 }
 
@@ -122,7 +128,7 @@ void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 
 int check_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
-    return sim->rabbits[i].survival_check_flag ? 1 : (genrand_real(rng) * 100.0 <= (double)sim->rabbits[i].survival_rate);
+    return sim->rabbits[i].survival_check_flag ? 1 : (genrand_real(rng) * 100.0 <= sim->rabbits[i].survival_rate);
 }
 
 void kill_rabbit(s_simulation_instance *sim, size_t i)
@@ -149,9 +155,13 @@ void check_survival(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 
 void update_survival_rate(s_simulation_instance *sim, size_t i)
 {
+    // monthly 
+    sim->rabbits[i].survival_check_flag = 0;
+
     if (sim->rabbits[i].age % 12 == 0)
     {
-        sim->rabbits[i].survival_check_flag = 0;
+        // yearly
+        //sim->rabbits[i].survival_check_flag = 0;
         if (sim->rabbits[i].age >= 120)
         {
             sim->rabbits[i].survival_rate -= 10 * ((sim->rabbits[i].age - 120) / 12);
@@ -191,7 +201,7 @@ void update_litters_per_year(s_simulation_instance *sim, size_t i, pcg32_random_
 
 int can_be_pregnant_this_month(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
-    int remaining_months = 12 - (sim->rabbits[i].age - sim->rabbits[i].maturity_age) % 12 + 1;
+    int remaining_months = 12 - (sim->rabbits[i].age - sim->rabbits[i].maturity_age) % 12;
     int remaining_litters = sim->rabbits[i].nb_litters_y - sim->rabbits[i].nb_litters;
     if (remaining_litters <= 0)
         return 0;
@@ -224,7 +234,7 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
 {
     for (int j = 0; j < nb_new_born; ++j)
     {
-        add_rabbit(sim, rng, 0, INIT_SRV_RATE);
+        add_rabbit(sim, rng, 0, INIT_SRV_RATE, 0);
     }
 }
 
@@ -236,10 +246,10 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
         if (sim->rabbits[i].status == 0)
             continue;
         sim->rabbits[i].age += 1;
+        check_survival(sim, i, rng);
+        update_survival_rate(sim, i);
         update_maturity(sim, i, rng);
         update_litters_per_year(sim, i, rng);
-        update_survival_rate(sim, i);
-        check_survival(sim, i, rng);
         nb_new_born += give_birth(sim, i, rng);
         check_pregnancy(sim, i, rng);
     }
@@ -259,7 +269,7 @@ float *simulate(s_simulation_instance *sim, int months, int initial_population_n
 
     for (int m = 0; m < months; ++m)
     {
-        if (sim->free_count == sim->rabbit_count)
+        if (sim->free_count == sim->rabbit_count) // all dead
             break;
         update_rabbits(sim, rng);
     }
@@ -315,7 +325,7 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
         // Check if this is the master thread (thread 0).
         // Only this one thread will ever enter the block and print.
         // This avoids the nesting rule violation and is the standard way to do this.
-        if (PRINT_OUTPUT)
+        if (PRINT_OUTPUT) // TO DO retutn to this later and check if it always ends at 100%
         {
             if (thread_id == 0)
             {
@@ -328,8 +338,7 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
         }
     }
 
-    // After the loop, print a newline to move off the progress bar line.
-    LOG_PRINT("\n");
+    LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)\n", nb_simulation, nb_simulation, 100.0f);
 
     float avg_alive_rabbits = total_population / (float)nb_simulation;
     float avg_dead_rabbits = total_dead_rabbits / (float)nb_simulation;

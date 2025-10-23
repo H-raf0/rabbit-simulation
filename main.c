@@ -19,12 +19,12 @@ int main()
     int exit_program = 0;
     int user_choice;
 
-    int months = 240;
-    int initial_population = 100000;
+    int months = 1200;
+    int initial_population = 10000;
     int nb_simulations = 100;
     
-    //uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
-    uint64_t base_seed = 1234997890123456700ULL;
+    uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
+    //uint64_t base_seed = 1234997890123456700ULL;
     int seed_is_custom = 0;
 
     if(!PRINT_OUTPUT){

@@ -6,10 +6,11 @@
 #include "pcg_basic.h"  // Include the PCG library header
 
 #define INIT_RABIT_CAPACITY 1000000
-#define INIT_SRV_RATE 35
-#define ADULT_SRV_RATE 60
+// those value are very very very sensitive, (75.6, 94.6) gives a stable population after 240 months but extinction over long time
+#define INIT_SRV_RATE 75.6f
+#define ADULT_SRV_RATE 94.6f
 
-#define PRINT_OUTPUT 1
+#define PRINT_OUTPUT 0
 
 #if defined(PRINT_OUTPUT) && PRINT_OUTPUT != 0
     #define LOG_PRINT(format, ...) do { printf(format, ##__VA_ARGS__); fflush(stdout); } while (0)
@@ -17,6 +18,7 @@
     #define LOG_PRINT(format, ...) do { } while (0)
 #endif
 
+// TO DO: check if u can optimise memory without affecting performance here
 typedef struct rabbit {
     int sex; // 0 male 1 female
     int status;
@@ -26,7 +28,7 @@ typedef struct rabbit {
     int pregnant;
     int nb_litters_y;
     int nb_litters;
-    int survival_rate;
+    float survival_rate;
     int survival_check_flag; // 1 checked, 0 no
 } s_rabbit;
 
@@ -47,12 +49,13 @@ int fibonacci(int n);
 double genrand_real(pcg32_random_t* rng);
 
 int ensure_capacity(s_simulation_instance *sim);
-void add_rabbit(s_simulation_instance *sim, pcg32_random_t* rng, int is_mature, int init_srv_rate);
+void add_rabbit(s_simulation_instance *sim, pcg32_random_t* rng, int is_mature, float init_srv_rate, int age);
 void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
 void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_random_t* rng);
 void reset_population(s_simulation_instance *sim);
 
 int generate_sex(pcg32_random_t* rng);
+int generate_random_age(pcg32_random_t *rng);
 int check_maturity(int age, pcg32_random_t* rng);
 void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 
