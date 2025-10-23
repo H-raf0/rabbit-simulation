@@ -41,12 +41,12 @@ int ensure_capacity(s_simulation_instance *sim)
     return 1;
 }
 
-char generate_sex(pcg32_random_t *rng)
+int generate_sex(pcg32_random_t *rng)
 {
-    return (genrand_real(rng) < 0.5) ? 'M' : 'F';
+    return (genrand_real(rng) < 0.5) ? 0 : 1;
 }
 
-void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng)
+void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, int init_srv_rate)
 {
     if (!ensure_capacity(sim))
         return;
@@ -64,31 +64,27 @@ void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng)
     r->sex = generate_sex(rng);
     r->status = 1;
     r->age = 0;
-    r->mature = 0;
+    r->mature = is_mature;
     r->maturity_age = 0;
     r->pregnant = 0;
     r->nb_litters_y = 0;
     r->nb_litters = 0;
-    r->survival_rate = INIT_SRV_RATE;
+    r->survival_rate = init_srv_rate;
 }
 
 void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
 {
-    add_rabbit(sim, rng);
-    add_rabbit(sim, rng);
-    sim->rabbits[0].sex = 'M';
-    sim->rabbits[0].mature = 1;
-    sim->rabbits[0].survival_rate = 100;
-    sim->rabbits[1].sex = 'F';
-    sim->rabbits[1].mature = 1;
-    sim->rabbits[1].survival_rate = 100;
+    add_rabbit(sim, rng, 1, 100);
+    add_rabbit(sim, rng, 1, 100);
+    sim->rabbits[0].sex = 0;
+    sim->rabbits[1].sex = 1;
 }
 
 void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_random_t *rng)
 {
     for (int i = 0; i < nb_rabbits; ++i)
     {
-        add_rabbit(sim, rng);
+        add_rabbit(sim, rng, 1, ADULT_SRV_RATE);
     }
 }
 
@@ -165,7 +161,7 @@ void update_survival_rate(s_simulation_instance *sim, size_t i)
     }
     else if (sim->rabbits[i].mature && sim->rabbits[i].age == sim->rabbits[i].maturity_age)
     {
-        sim->rabbits[i].survival_rate = 60;
+        sim->rabbits[i].survival_rate = ADULT_SRV_RATE;
     }
 }
 
@@ -189,7 +185,7 @@ int generate_litters_per_year(pcg32_random_t *rng)
 
 void update_litters_per_year(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
-    if (sim->rabbits[i].sex == 'F' && sim->rabbits[i].mature && (sim->rabbits[i].age - sim->rabbits[i].maturity_age) % 12 == 0)
+    if (sim->rabbits[i].sex == 1 && sim->rabbits[i].mature && (sim->rabbits[i].age - sim->rabbits[i].maturity_age) % 12 == 0)
     {
         sim->rabbits[i].nb_litters_y = generate_litters_per_year(rng);
     }
@@ -220,7 +216,7 @@ int give_birth(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 
 void check_pregnancy(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
-    if (sim->rabbits[i].sex == 'F' && can_be_pregnant_this_month(sim, i, rng))
+    if (sim->rabbits[i].sex == 1 && can_be_pregnant_this_month(sim, i, rng))
     {
         sim->rabbits[i].pregnant = 1;
     }
@@ -230,7 +226,7 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
 {
     for (int j = 0; j < nb_new_born; ++j)
     {
-        add_rabbit(sim, rng);
+        add_rabbit(sim, rng, 0, INIT_SRV_RATE);
     }
 }
 

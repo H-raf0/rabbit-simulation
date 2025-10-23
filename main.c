@@ -7,6 +7,9 @@
 #include "rabbitsim.h"
 #include "pcg_basic.h"
 
+// TO DO: init population is made of newborn, should be changed to adults
+//      : improve the survival check code
+
 // --- Helper function to clear invalid input from stdin ---
 void clear_input_buffer() {
     int c;

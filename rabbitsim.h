@@ -7,6 +7,7 @@
 
 #define INIT_RABIT_CAPACITY 1000000
 #define INIT_SRV_RATE 35
+#define ADULT_SRV_RATE 60
 
 #define PRINT_OUTPUT 0
 
@@ -17,7 +18,7 @@
 #endif
 
 typedef struct rabbit {
-    char sex;
+    int sex; // 0 male 1 female
     int status;
     int age;
     int mature;
@@ -26,6 +27,7 @@ typedef struct rabbit {
     int nb_litters_y;
     int nb_litters;
     int survival_rate;
+    int survival_check_flag;
 } s_rabbit;
 
 typedef struct {
@@ -45,12 +47,12 @@ int fibonacci(int n);
 double genrand_real(pcg32_random_t* rng);
 
 int ensure_capacity(s_simulation_instance *sim);
-void add_rabbit(s_simulation_instance *sim, pcg32_random_t* rng);
+void add_rabbit(s_simulation_instance *sim, pcg32_random_t* rng, int is_mature, int init_srv_rate);
 void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
 void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_random_t* rng);
 void reset_population(s_simulation_instance *sim);
 
-char generate_sex(pcg32_random_t* rng);
+int generate_sex(pcg32_random_t* rng);
 int check_maturity(int age, pcg32_random_t* rng);
 void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 
