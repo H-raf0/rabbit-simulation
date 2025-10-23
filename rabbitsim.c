@@ -289,19 +289,16 @@ float *stock_data(int count, ...)
     return arr;
 }
 
-void multi_simulate(int months, int initial_population_nb, int nb_simulation)
+void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
 {
     float total_population = 0, total_dead_rabbits = 0;
-    //uint64_t base_seed = (uint64_t)time(NULL) ^ (intptr_t)&printf;
-    uint64_t base_seed = 1234567890987654321ULL;
+    int sims_done = 0;
 
     #pragma omp parallel for reduction(+ : total_population, total_dead_rabbits)
     for (int i = 0; i < nb_simulation; i++)
     {
         s_simulation_instance sim_instance = {0};
         pcg32_random_t rng;
-
-        // Each thread gets its own unique, non-overlapping random number stream
         pcg32_srandom_r(&rng, base_seed, (uint64_t)omp_get_thread_num());
 
         float *tab = simulate(&sim_instance, months, initial_population_nb, &rng);
@@ -311,7 +308,34 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation)
 
         free(tab);
         reset_population(&sim_instance);
+
+        // PROGRESS BAR
+
+        // Atomically (safely) increment the shared counter.
+        #pragma omp atomic update
+        sims_done++;
+
+        // Get the ID of the current thread.
+        int thread_id = omp_get_thread_num();
+
+        // Check if this is the master thread (thread 0).
+        // Only this one thread will ever enter the block and print.
+        // This avoids the nesting rule violation and is the standard way to do this.
+        if (PRINT_OUTPUT)
+        {
+            if (thread_id == 0)
+            {
+                float progress = (float)sims_done * 100.0f / nb_simulation;
+
+                LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)", sims_done, nb_simulation, progress);
+
+                fflush(stdout);
+            }
+        }
     }
+
+    // After the loop, print a newline to move off the progress bar line.
+    LOG_PRINT("\n");
 
     float avg_alive_rabbits = total_population / (float)nb_simulation;
     float avg_dead_rabbits = total_dead_rabbits / (float)nb_simulation;

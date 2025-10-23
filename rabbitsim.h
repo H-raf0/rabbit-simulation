@@ -69,6 +69,6 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
 void update_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
 float* simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t* rng);
 float* stock_data(int count, ...);
-void multi_simulate(int months, int initial_population_nb, int nb_simulation);
+void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed);
 
 #endif
