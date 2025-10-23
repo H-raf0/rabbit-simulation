@@ -9,7 +9,7 @@
 #define INIT_SRV_RATE 35
 #define ADULT_SRV_RATE 60
 
-#define PRINT_OUTPUT 0
+#define PRINT_OUTPUT 1
 
 #if defined(PRINT_OUTPUT) && PRINT_OUTPUT != 0
     #define LOG_PRINT(format, ...) do { printf(format, ##__VA_ARGS__); fflush(stdout); } while (0)
@@ -27,7 +27,7 @@ typedef struct rabbit {
     int nb_litters_y;
     int nb_litters;
     int survival_rate;
-    int survival_check_flag;
+    int survival_check_flag; // 1 checked, 0 no
 } s_rabbit;
 
 typedef struct {
@@ -56,7 +56,7 @@ int generate_sex(pcg32_random_t* rng);
 int check_maturity(int age, pcg32_random_t* rng);
 void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 
-int check_survival_rate(int survival_rate, pcg32_random_t* rng);
+int check_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng);
 void kill_rabbit(s_simulation_instance *sim, size_t i);
 void check_survival(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 void update_survival_rate(s_simulation_instance *sim, size_t i);

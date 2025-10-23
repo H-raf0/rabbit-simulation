@@ -120,11 +120,9 @@ void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
     }
 }
 
-int check_survival_rate(int survival_rate, pcg32_random_t *rng)
+int check_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
-    if (survival_rate < 0)
-        return 1;
-    return (genrand_real(rng) * 100.0 <= (double)survival_rate);
+    return sim->rabbits[i].survival_check_flag ? 1 : (genrand_real(rng) * 100.0 <= (double)sim->rabbits[i].survival_rate);
 }
 
 void kill_rabbit(s_simulation_instance *sim, size_t i)
@@ -138,13 +136,13 @@ void check_survival(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
     if (sim->rabbits[i].status == 1)
     {
-        if (!check_survival_rate(sim->rabbits[i].survival_rate, rng))
+        if (!check_survival_rate(sim, i, rng))
         {
             kill_rabbit(sim, i);
         }
         else
         {
-            sim->rabbits[i].survival_rate *= -1;
+            sim->rabbits[i].survival_check_flag = 1;
         }
     }
 }
@@ -153,7 +151,7 @@ void update_survival_rate(s_simulation_instance *sim, size_t i)
 {
     if (sim->rabbits[i].age % 12 == 0)
     {
-        sim->rabbits[i].survival_rate = sim->rabbits[i].survival_rate < 0 ? -sim->rabbits[i].survival_rate : sim->rabbits[i].survival_rate;
+        sim->rabbits[i].survival_check_flag = 0;
         if (sim->rabbits[i].age >= 120)
         {
             sim->rabbits[i].survival_rate -= 10 * ((sim->rabbits[i].age - 120) / 12);

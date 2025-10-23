@@ -7,10 +7,8 @@
 #include "rabbitsim.h"
 #include "pcg_basic.h"
 
-// TO DO: init population is made of newborn, should be changed to adults
-//      : improve the survival check code
 
-// --- Helper function to clear invalid input from stdin ---
+// Helper function to clear invalid input from stdin
 void clear_input_buffer() {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
@@ -22,10 +20,11 @@ int main()
     int user_choice;
 
     int months = 240;
-    int initial_population = 10000;
+    int initial_population = 100000;
     int nb_simulations = 100;
     
-    uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
+    //uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
+    uint64_t base_seed = 1234997890123456700ULL;
     int seed_is_custom = 0;
 
     if(!PRINT_OUTPUT){
