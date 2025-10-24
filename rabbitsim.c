@@ -377,6 +377,8 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
     }
 }
 
+// TO DO : analyse for more statisques and data
+
 /**
  * @brief Iterates through all rabbits in the simulation and updates their states for one month.
  *        This includes aging, checking survival, updating survival rates, checking maturity, handling births, and checking for new pregnancies.
