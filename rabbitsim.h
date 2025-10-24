@@ -1,49 +1,68 @@
 #ifndef RABBITSIM_H
 #define RABBITSIM_H
 
-#include <stddef.h>
-#include <stdint.h>     // Required for PCG's uint types
-#include "pcg_basic.h"  // Include the PCG library header
+// Standard library includes
+#include <stddef.h>     // For size_t
+#include <stdint.h>     // Required for PCG's uint types like uint32_t, uint64_t
+#include <stdio.h>      // For standard input/output functions like printf, fflush
+#include <stdlib.h>     // For general utilities like malloc, realloc, free
+#include <stdarg.h>     // For variable argument lists (va_list, va_start, etc.)
+#include <time.h>       // For time-related functions, often used for seeding random number generators
+#include <omp.h>        // For OpenMP parallel programming directives
+#include "pcg_basic.h"  // Include the PCG (Permuted Congruential Generator) library header for random numbers
 
-#define INIT_RABIT_CAPACITY 1000000
-// those value are very very very sensitive, (75.6, 94.6) gives a stable population after 240 months but extinction over long time
-#define INIT_SRV_RATE 75.6f
-#define ADULT_SRV_RATE 94.6f
+// Define initial capacity for rabbit array to avoid frequent reallocations
+#define INIT_RABIT_CAPACITY 1000000 
 
+// Survival rates for rabbits at different life stages. These values are crucial
+// for the long-term stability or extinction of the simulated population.
+// For example, (75.6, 94.6) might lead to a stable population for a period
+// but eventually extinction over a very long time.
+#define INIT_SRV_RATE 75.6f  // Initial survival rate for newborn rabbits
+#define ADULT_SRV_RATE 94.6f // Survival rate for adult rabbits
+
+// Macro to control output printing. If PRINT_OUTPUT is non-zero, logs will be printed.
 #define PRINT_OUTPUT 0
 
+// Conditional compilation for logging messages.
+// If PRINT_OUTPUT is enabled, LOG_PRINT will call printf and fflush.
+// Otherwise, it will expand to an empty operation, effectively removing log calls from the compiled code.
 #if defined(PRINT_OUTPUT) && PRINT_OUTPUT != 0
     #define LOG_PRINT(format, ...) do { printf(format, ##__VA_ARGS__); fflush(stdout); } while (0)
 #else
     #define LOG_PRINT(format, ...) do { } while (0)
 #endif
 
-// TO DO: check if u can optimise memory without affecting performance here
+// Structure representing a single rabbit in the simulation.
 typedef struct rabbit {
-    int sex; // 0 male 1 female
-    int status;
-    int age;
-    int mature;
-    int maturity_age;
-    int pregnant;
-    int nb_litters_y;
-    int nb_litters;
-    float survival_rate;
-    int survival_check_flag; // 1 checked, 0 no
-} s_rabbit;
+    int sex;                     // 0 for female, 1 for male
+    int status;                  // 0 for dead, 1 for alive
+    int age;                     // Age in months
+    int mature;                  // 0 for immature, 1 for mature (can reproduce)
+    int maturity_age;            // The age at which the rabbit became mature
+    int pregnant;                // 0 for not pregnant, 1 for pregnant (only for females)
+    int nb_litters_y;            // Number of litters a female can have per year
+    int nb_litters;              // Number of litters a female has had in the current year
+    float survival_rate;         // Probability of survival for the current month (e.g., 94.6 for 94.6% chance)
+    int survival_check_flag;     // Flag to indicate if survival has already been checked this month (1 for checked, 0 for not)
+} s_rabbit; // Alias for the rabbit structure
 
+// Structure representing a single simulation instance.
 typedef struct {
-    s_rabbit *rabbits;
-    size_t rabbit_count;
-    size_t dead_rabbit_count;
-    size_t rabbit_capacity;
-    int *free_indices;
-    size_t free_count;
-} s_simulation_instance;
+    s_rabbit *rabbits;           // Pointer to a dynamically allocated array of rabbits
+    size_t rabbit_count;         // Current number of rabbits in the array (both alive and dead but still in array)
+    size_t dead_rabbit_count;    // Total number of rabbits that have died throughout the simulation
+    size_t rabbit_capacity;      // Current allocated capacity for the rabbits array
+    int *free_indices;           // Array of indices of "dead" rabbit slots that can be reused
+    size_t free_count;           // Number of available free slots
+} s_simulation_instance; // Alias for the simulation instance structure
 
 
-// --- Function Prototypes ---
-// Note the new pcg32_random_t* rng parameter in many functions.
+//   > Function Prototypes <
+// Declarations for all functions used in the rabbit simulation.
+// Many functions now include a 'pcg32_random_t* rng' parameter
+// to pass the random number generator state explicitly,
+// allowing for thread-safe and reproducible simulations.
 
 int fibonacci(int n);
 double genrand_real(pcg32_random_t* rng);
