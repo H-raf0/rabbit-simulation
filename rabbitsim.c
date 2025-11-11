@@ -77,13 +77,13 @@ int generate_random_age(pcg32_random_t *rng){
  * @brief Adds a new rabbit to the simulation instance.
  *        If there are free slots (dead rabbits), it reuses one; otherwise, it appends to the end.
  * @param sim A pointer to the s_simulation_instance.
- * @param rng A pointer to the PCG random number generator state.
  * @param is_mature An integer indicating if the rabbit is mature (1) or not (0).
  * @param init_srv_rate The initial survival rate for the rabbit.
  * @param age The initial age of the rabbit.
+ * @param sex the sex of the rabbit
  * @return void
  */
-void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, float init_srv_rate, int age)
+void add_rabbit(s_simulation_instance *sim, int is_mature, float init_srv_rate, int age, int sex)
 {
     if (!ensure_capacity(sim))
         return;
@@ -98,7 +98,7 @@ void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, 
         r = &sim->rabbits[sim->rabbit_count++];
     }
 
-    r->sex = generate_sex(rng);
+    r->sex = sex;
     r->status = 1;
     r->age = age;
     r->mature = is_mature;
@@ -108,20 +108,19 @@ void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, 
     r->nb_litters = 0;
     r->survival_rate = init_srv_rate;
     r->survival_check_flag = 0;
+
+    sim->sex_distribution[sex]++;
 }
 
 /**
  * @brief Initializes the simulation with two "super" rabbits (one male, one female), both mature with a high survival rate and age 9.
  * @param sim A pointer to the s_simulation_instance.
- * @param rng A pointer to the PCG random number generator state.
  * @return void
  */
-void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
+void init_2_super_rabbits(s_simulation_instance *sim)
 {
-    add_rabbit(sim, rng, 1, 100, 9);
-    add_rabbit(sim, rng, 1, 100, 9);
-    sim->rabbits[0].sex = 0; // Female
-    sim->rabbits[1].sex = 1; // Male
+    add_rabbit(sim, 1, 100, 9, 0);
+    add_rabbit(sim, 1, 100, 9, 1);
 }
 
 /**
@@ -135,7 +134,7 @@ void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_
 {
     for (int i = 0; i < nb_rabbits; ++i)
     {
-        add_rabbit(sim, rng, 1, ADULT_SRV_RATE, generate_random_age(rng));
+        add_rabbit(sim, 1, ADULT_SRV_RATE, generate_random_age(rng), generate_sex(rng));
     }
 }
 
@@ -201,7 +200,6 @@ void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
  */
 int check_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
-   
     return sim->rabbits[i].survival_check_flag ? 1 : (genrand_real(rng) * 100.0 <= sim->rabbits[i].survival_rate);
 }
 
@@ -374,7 +372,7 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
 {
     for (int j = 0; j < nb_new_born; ++j)
     {
-        add_rabbit(sim, rng, 0, INIT_SRV_RATE, 0);
+        add_rabbit(sim, 0, INIT_SRV_RATE, 0, generate_sex(rng));
     }
 }
 
@@ -418,9 +416,10 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
  */
 float *simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t *rng)
 {
+    int extinction_month = 0;
     if (initial_population_nb == 2)
     {
-        init_2_super_rabbits(sim, rng);
+        init_2_super_rabbits(sim);
     }
     else
     {
@@ -429,13 +428,15 @@ float *simulate(s_simulation_instance *sim, int months, int initial_population_n
 
     for (int m = 0; m < months; ++m)
     {
-        if (sim->free_count == sim->rabbit_count) // all dead
+        if (sim->free_count == sim->rabbit_count){ // all dead
+            extinction_month = m;
             break;
+        }
         update_rabbits(sim, rng);
     }
 
     int alive_rabbits_count = sim->rabbit_count - sim->free_count;
-    return stock_data(2, (double)sim->dead_rabbit_count, (double)alive_rabbits_count);
+    return stock_data(5, (double)sim->dead_rabbit_count, (double)alive_rabbits_count, (double)extinction_month, (double)sim->sex_distribution[0], (double)sim->sex_distribution[1]);
 }
 
 /**
@@ -470,10 +471,10 @@ float *stock_data(int count, ...)
  * @param base_seed A base seed for the random number generators, combined with thread ID for uniqueness.
  * @return void
  */
-/*void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
+void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
 {
-    float total_population = 0, total_dead_rabbits = 0;
-    int sims_done = 0;
+    int total_population = 0, total_dead_rabbits = 0;
+    int sims_done = 0, extinction_month = 0, nb_extinctions = 0, total_nb_males = 0, total_nb_females = 0;
 
     #pragma omp parallel for reduction(+ : total_population, total_dead_rabbits)
     for (int i = 0; i < nb_simulation; i++)
@@ -485,8 +486,12 @@ float *stock_data(int count, ...)
 
         float *tab = simulate(&sim_instance, months, initial_population_nb, &rng);
 
-        total_dead_rabbits += tab[0];
-        total_population += tab[1];
+        total_dead_rabbits += (int)tab[0];
+        total_population += (int)tab[1];
+        extinction_month += (int)tab[2];
+        nb_extinctions += (int)tab[2] != 0 ? 1 : 0;
+        total_nb_females += (int)tab[3];
+        total_nb_males += (int)tab[4];
 
         free(tab);
         reset_population(&sim_instance);
@@ -519,65 +524,19 @@ float *stock_data(int count, ...)
 
     float avg_alive_rabbits = total_population / (float)nb_simulation;
     float avg_dead_rabbits = total_dead_rabbits / (float)nb_simulation;
+    float avg_extinction_month = extinction_month / (float)nb_extinctions;
+    float avg_males = total_nb_males / (float)nb_simulation;
+    float avg_females = total_nb_females / (float)nb_simulation;
+
+
+    char extinction_str[32];
+    if (isnan(avg_extinction_month))
+        snprintf(extinction_str, sizeof(extinction_str), "N/A");
+    else
+        snprintf(extinction_str, sizeof(extinction_str), "%.2f", avg_extinction_month);
+
 
     printf("\n\n--> the average <--\n    input:\n       start number: %d\n       months : %d\n       number of simulations : %d\n    results:\n       average dead population : %.2f\n"
-           "       average alive rabbits : %.2f\n",
-           initial_population_nb, months, nb_simulation, avg_dead_rabbits, avg_alive_rabbits);
-}
-*/
-void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
-{
-    s_stats_acc global_stats;
-    stats_acc_init(&global_stats);
-
-    int sims_done = 0;
-
-    #pragma omp parallel
-    {
-        s_stats_acc local_stats;
-        stats_acc_init(&local_stats);
-
-        #pragma omp for
-        for (int i = 0; i < nb_simulation; i++)
-        {
-            s_simulation_instance sim_instance = (s_simulation_instance){0};
-            pcg32_random_t rng;
-            pcg32_srandom_r(&rng, base_seed, (uint64_t)omp_get_thread_num());
-
-            s_sim_result r = simulate_stats(&sim_instance,
-                                            months,
-                                            initial_population_nb,
-                                            &rng);
-
-            stats_acc_add(&local_stats, &r);
-
-            reset_population(&sim_instance);
-
-            #pragma omp atomic update
-            sims_done++;
-
-            if (PRINT_OUTPUT && omp_get_thread_num() == 0)
-            {
-                float progress = (float)sims_done * 100.0f / nb_simulation;
-                LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)",
-                          sims_done, nb_simulation, progress);
-                fflush(stdout);
-            }
-        }
-
-        #pragma omp critical
-        {
-            stats_acc_merge(&global_stats, &local_stats);
-        }
-    }
-
-    if (PRINT_OUTPUT) {
-        LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)\n",
-                  nb_simulation, nb_simulation, 100.0f);
-    }
-
-    stats_print_report(&global_stats,
-                       months,
-                       initial_population_nb,
-                       nb_simulation);
+           "       average alive rabbits : %.2f\n       average extinction month : %s\n       average male : %.2f\n       average female : %.2f\n",
+           initial_population_nb, months, nb_simulation, avg_dead_rabbits, avg_alive_rabbits, extinction_str, avg_males, avg_females);
 }
