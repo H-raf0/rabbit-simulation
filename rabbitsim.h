@@ -56,7 +56,28 @@ typedef struct {
     int *free_indices;           // Array of indices of "dead" rabbit slots that can be reused
     size_t free_count;           // Number of available free slots
 } s_simulation_instance; // Alias for the simulation instance structure
+// structures de stats 
+typedef struct {
+    double alive_final;   // nb de lapins vivants à la fin
+    double dead_final;    // nb total de lapins morts
+    int    extinct;       // 1 si tout le monde est mort, 0 sinon
+    int    months_run;    // nb de mois réellement simulés
+} s_sim_result;
 
+typedef struct {
+    double sum_alive;
+    double sumsq_alive;
+    double min_alive;
+    double max_alive;
+
+    double sum_dead;
+    double sumsq_dead;
+    double min_dead;
+    double max_dead;
+
+    int    nb_extinctions;
+    int    n;             // nombre de simulations accumulées
+} s_stats_acc;
 
 //   > Function Prototypes <
 // Declarations for all functions used in the rabbit simulation.
@@ -94,5 +115,11 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
 float* simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t* rng);
 float* stock_data(int count, ...);
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed);
-
+//stats 
+// init / ajout / fusion / affichage
+void stats_acc_init(s_stats_acc *st);
+void stats_acc_add(s_stats_acc *st, const s_sim_result *r);
+void stats_acc_merge(s_stats_acc *dst, const s_stats_acc *src);
+void stats_print_report(const s_stats_acc *st, int months, int initial_population, int nb_simulation);
+s_sim_result simulate_stats(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t *rng);
 #endif

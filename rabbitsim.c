@@ -201,6 +201,7 @@ void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
  */
 int check_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
+   
     return sim->rabbits[i].survival_check_flag ? 1 : (genrand_real(rng) * 100.0 <= sim->rabbits[i].survival_rate);
 }
 
@@ -469,7 +470,7 @@ float *stock_data(int count, ...)
  * @param base_seed A base seed for the random number generators, combined with thread ID for uniqueness.
  * @return void
  */
-void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
+/*void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
 {
     float total_population = 0, total_dead_rabbits = 0;
     int sims_done = 0;
@@ -522,4 +523,61 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
     printf("\n\n--> the average <--\n    input:\n       start number: %d\n       months : %d\n       number of simulations : %d\n    results:\n       average dead population : %.2f\n"
            "       average alive rabbits : %.2f\n",
            initial_population_nb, months, nb_simulation, avg_dead_rabbits, avg_alive_rabbits);
+}
+*/
+void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
+{
+    s_stats_acc global_stats;
+    stats_acc_init(&global_stats);
+
+    int sims_done = 0;
+
+    #pragma omp parallel
+    {
+        s_stats_acc local_stats;
+        stats_acc_init(&local_stats);
+
+        #pragma omp for
+        for (int i = 0; i < nb_simulation; i++)
+        {
+            s_simulation_instance sim_instance = (s_simulation_instance){0};
+            pcg32_random_t rng;
+            pcg32_srandom_r(&rng, base_seed, (uint64_t)omp_get_thread_num());
+
+            s_sim_result r = simulate_stats(&sim_instance,
+                                            months,
+                                            initial_population_nb,
+                                            &rng);
+
+            stats_acc_add(&local_stats, &r);
+
+            reset_population(&sim_instance);
+
+            #pragma omp atomic update
+            sims_done++;
+
+            if (PRINT_OUTPUT && omp_get_thread_num() == 0)
+            {
+                float progress = (float)sims_done * 100.0f / nb_simulation;
+                LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)",
+                          sims_done, nb_simulation, progress);
+                fflush(stdout);
+            }
+        }
+
+        #pragma omp critical
+        {
+            stats_acc_merge(&global_stats, &local_stats);
+        }
+    }
+
+    if (PRINT_OUTPUT) {
+        LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)\n",
+                  nb_simulation, nb_simulation, 100.0f);
+    }
+
+    stats_print_report(&global_stats,
+                       months,
+                       initial_population_nb,
+                       nb_simulation);
 }
