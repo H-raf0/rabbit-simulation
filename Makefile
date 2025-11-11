@@ -1,6 +1,8 @@
 CC = gcc
 # -03 aggressive optimisation, -fopenmp to use <omp.h> (parrallel prossecing)
 CFLAGS = -O3 -fopenmp -Wall -Wextra -std=c11 -g
+LDFLAGS = -lm
+
 SRC = main.c pcg_basic.c rabbitsim.c
 OBJ = $(SRC:.c=.o)
 DEPS = pcg_basic.h rabbitsim.h
@@ -9,10 +11,13 @@ EXEC = sim
 all: $(EXEC)
 
 $(EXEC): $(OBJ)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 %.o: %.c $(DEPS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJ) $(EXEC)
+	rm -f *.csv
+	rm -f *.png
+	rm -f simulation_report.txt

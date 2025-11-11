@@ -25,6 +25,12 @@
 // Macro to control output printing. If PRINT_OUTPUT is non-zero, logs will be printed.
 #define PRINT_OUTPUT 1
 
+// NEW: Macro to control data logging to files
+#define ENABLE_DATA_LOGGING 1
+
+// NEW: Maximum number of simulations to log detailed monthly data (to avoid huge files)
+#define MAX_SIMULATIONS_TO_LOG 3
+
 // Conditional compilation for logging messages.
 // If PRINT_OUTPUT is enabled, LOG_PRINT will call printf and fflush.
 // Otherwise, it will expand to an empty operation, effectively removing log calls from the compiled code.
@@ -48,6 +54,19 @@ typedef struct rabbit {
     int survival_check_flag;     // Flag to indicate if survival has already been checked this month (1 for checked, 0 for not) // Not used currently since i check each month instead of each year so maybe i should remove it later and update the comment related to it
 } s_rabbit; // Alias for the rabbit structure
 
+// NEW: Structure to store monthly statistics for a single simulation
+typedef struct {
+    int month;                   // Month number
+    int total_alive;             // Total living rabbits
+    int males;                   // Living males
+    int females;                 // Living females
+    int mature_rabbits;          // Number of mature rabbits
+    int pregnant_females;        // Number of pregnant females
+    int births_this_month;       // Number of births this month
+    int deaths_this_month;       // Number of deaths this month
+    float avg_age;               // Average age of living rabbits
+} s_monthly_stats;
+
 // Structure representing a single simulation instance.
 typedef struct {
     s_rabbit *rabbits;           // Pointer to a dynamically allocated array of rabbits
@@ -56,7 +75,14 @@ typedef struct {
     size_t rabbit_capacity;      // Current allocated capacity for the rabbits array
     int *free_indices;           // Array of indices of "dead" rabbit slots that can be reused
     size_t free_count;           // Number of available free slots
-    int sex_distribution[2];     // Distribution of the males and the females  
+    int sex_distribution[2];     // Distribution of the males and the females
+    
+    // NEW: Logging-related fields
+    s_monthly_stats *monthly_data;  // Array to store monthly statistics
+    int monthly_data_capacity;      // Allocated capacity for monthly_data
+    int monthly_data_count;         // Number of months recorded
+    int deaths_this_month;          // Track deaths for current month
+    int births_this_month;          // Track births for current month
 } s_simulation_instance; // Alias for the simulation instance structure
 
 /**
@@ -118,5 +144,12 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
 void update_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
 s_simulation_results simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t* rng);
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed);
+
+// NEW: Logging function prototypes
+void init_monthly_logging(s_simulation_instance *sim, int months);
+void record_monthly_stats(s_simulation_instance *sim, int month);
+void write_simulation_log(s_simulation_instance *sim, int sim_number, int initial_population);
+void write_summary_log(int months, int initial_population, int nb_simulations, 
+                       s_simulation_results *all_results, uint64_t base_seed);
 
 #endif
