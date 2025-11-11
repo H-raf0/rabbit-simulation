@@ -10,6 +10,7 @@
 #include <time.h>       // For time-related functions, often used for seeding random number generators
 #include <omp.h>        // For OpenMP parallel programming directives
 #include "pcg_basic.h"  // Include the PCG (Permuted Congruential Generator) library header for random numbers
+#include <math.h>       // For math functions
 
 // Define initial capacity for rabbit array to avoid frequent reallocations
 #define INIT_RABIT_CAPACITY 1000000 
@@ -55,6 +56,7 @@ typedef struct {
     size_t rabbit_capacity;      // Current allocated capacity for the rabbits array
     int *free_indices;           // Array of indices of "dead" rabbit slots that can be reused
     size_t free_count;           // Number of available free slots
+    int sex_distribution[2];     // Distribution of the males and the females  
 } s_simulation_instance; // Alias for the simulation instance structure
 // structures de stats 
 typedef struct {
@@ -89,8 +91,8 @@ int fibonacci(int n);
 double genrand_real(pcg32_random_t* rng);
 
 int ensure_capacity(s_simulation_instance *sim);
-void add_rabbit(s_simulation_instance *sim, pcg32_random_t* rng, int is_mature, float init_srv_rate, int age);
-void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
+void add_rabbit(s_simulation_instance *sim, int is_mature, float init_srv_rate, int age, int sex);
+void init_2_super_rabbits(s_simulation_instance *sim);
 void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_random_t* rng);
 void reset_population(s_simulation_instance *sim);
 
