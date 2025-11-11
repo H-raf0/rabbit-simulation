@@ -23,7 +23,7 @@
 #define ADULT_SRV_RATE 94.6f // Survival rate for adult rabbits
 
 // Macro to control output printing. If PRINT_OUTPUT is non-zero, logs will be printed.
-#define PRINT_OUTPUT 0
+#define PRINT_OUTPUT 1
 
 // Conditional compilation for logging messages.
 // If PRINT_OUTPUT is enabled, LOG_PRINT will call printf and fflush.

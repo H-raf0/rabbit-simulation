@@ -21,7 +21,7 @@ int main()
     int user_choice;
 
     int months = 1200;
-    int initial_population = 10000;
+    int initial_population = 1000000;
     int nb_simulations = 100;
     
     uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
