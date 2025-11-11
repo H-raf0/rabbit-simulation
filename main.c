@@ -7,6 +7,7 @@
 #include "rabbitsim.h"
 #include "pcg_basic.h"
 
+// NOTE : reducing nummber of simulations running on the same time reduces memory bottleneck
 
 // Helper function to clear invalid input from stdin
 void clear_input_buffer() {
