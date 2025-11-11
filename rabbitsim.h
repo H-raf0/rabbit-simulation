@@ -45,7 +45,7 @@ typedef struct rabbit {
     int nb_litters_y;            // Number of litters a female can have per year
     int nb_litters;              // Number of litters a female has had in the current year
     float survival_rate;         // Probability of survival for the current month (e.g., 94.6 for 94.6% chance)
-    int survival_check_flag;     // Flag to indicate if survival has already been checked this month (1 for checked, 0 for not)
+    int survival_check_flag;     // Flag to indicate if survival has already been checked this month (1 for checked, 0 for not) // Not used currently since i check each month instead of each year so maybe i should remove it later and update the comment related to it
 } s_rabbit; // Alias for the rabbit structure
 
 // Structure representing a single simulation instance.
@@ -58,6 +58,29 @@ typedef struct {
     size_t free_count;           // Number of available free slots
     int sex_distribution[2];     // Distribution of the males and the females  
 } s_simulation_instance; // Alias for the simulation instance structure
+
+/**
+ * @brief Structure to store comprehensive results from a single simulation run.
+ * 
+ * This structure captures various statistics about the simulation, including
+ * population dynamics, sex distribution, and temporal patterns. It replaces
+ * the previous float array approach for better type safety and clarity.
+ */
+typedef struct {
+    int total_dead;              // Total number of rabbit deaths throughout simulation
+    int final_alive;             // Number of living rabbits at simulation end
+    int extinction_month;        // Month when population went extinct (0 if no extinction)
+    int final_males;             // Number of males at simulation end
+    int final_females;           // Number of females at simulation end
+    int peak_population;         // Maximum living population reached during simulation
+    int peak_population_month;   // Month when peak population was achieved
+    int min_population;          // Minimum living population after initial population (excludes month 0)
+    int min_population_month;    // Month when minimum population occurred
+    long long total_population_sum; // Sum of population across all months (for average calculation)
+    int months_simulated;        // Actual number of months simulated (may be less than requested if extinction)
+    float male_percentage;       // Percentage of males in final population
+    float female_percentage;     // Percentage of females in final population
+} s_simulation_results;
 
 
 //   > Function Prototypes <
@@ -93,8 +116,7 @@ void check_pregnancy(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_random_t* rng);
 
 void update_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
-float* simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t* rng);
-float* stock_data(int count, ...);
+s_simulation_results simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t* rng);
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed);
 
 #endif

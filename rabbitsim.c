@@ -1,4 +1,3 @@
-
 #include "rabbitsim.h" 
 
 
@@ -376,8 +375,6 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
     }
 }
 
-// TO DO : analyse for more statisques and data
-
 /**
  * @brief Iterates through all rabbits in the simulation and updates their states for one month.
  *        This includes aging, checking survival, updating survival rates, checking maturity, handling births, and checking for new pregnancies.
@@ -407,16 +404,29 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
 /**
  * @brief Runs a full simulation of the rabbit population over a specified number of months.
  *        Initializes the population, then iteratively updates rabbit states each month.
- *        Returns an array containing the total number of dead rabbits and the total number of alive rabbits at the end of the simulation.
+ *        Tracks comprehensive statistics including population dynamics, sex distribution,
+ *        and temporal patterns (peak/minimum populations).
+ * 
  * @param sim A pointer to the s_simulation_instance.
  * @param months The total number of months to simulate.
  * @param initial_population_nb The initial number of rabbits. If 2, "super" rabbits are used.
  * @param rng A pointer to the PCG random number generator state.
- * @return A float array (allocated on heap) containing [dead_rabbits_count, alive_rabbits_count].
+ * @return A s_simulation_results struct containing all collected statistics.
  */
-float *simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t *rng)
+s_simulation_results simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t *rng)
 {
-    int extinction_month = 0;
+    // Initialize results structure with default values
+    s_simulation_results results = {0};
+    
+    // Variables to track population statistics during simulation
+    int peak_population = 0;
+    int peak_month = 0;
+    int min_population = INT32_MAX;  // Start with maximum possible value
+    int min_month = 0;
+    long long population_sum = 0;
+    int actual_months = 0;
+    
+    // Initialize starting population based on parameter
     if (initial_population_nb == 2)
     {
         init_2_super_rabbits(sim);
@@ -426,45 +436,90 @@ float *simulate(s_simulation_instance *sim, int months, int initial_population_n
         init_starting_population(sim, initial_population_nb, rng);
     }
 
+    // Main simulation loop - iterate through each month
     for (int m = 0; m < months; ++m)
     {
-        if (sim->free_count == sim->rabbit_count){ // all dead
-            extinction_month = m;
+        // Calculate current living population
+        int current_alive = sim->rabbit_count - sim->free_count;
+        
+        // Check for extinction (all rabbits dead)
+        if (sim->free_count == sim->rabbit_count)
+        {
+            results.extinction_month = m;
+            actual_months = m;
             break;
         }
+        
+        // Track peak population (maximum alive at any point)
+        if (current_alive > peak_population)
+        {
+            peak_population = current_alive;
+            peak_month = m;
+        }
+        
+        // Track minimum population (excluding initial month to see recovery/decline patterns)
+        if (m > 0 && current_alive < min_population)
+        {
+            min_population = current_alive;
+            min_month = m;
+        }
+        
+        // Accumulate population for average calculation
+        population_sum += current_alive;
+        actual_months = m + 1;
+        
+        // Update all rabbits for this month (births, deaths, aging, etc.)
         update_rabbits(sim, rng);
     }
 
-    int alive_rabbits_count = sim->rabbit_count - sim->free_count;
-    return stock_data(5, (double)sim->dead_rabbit_count, (double)alive_rabbits_count, (double)extinction_month, (double)sim->sex_distribution[0], (double)sim->sex_distribution[1]);
-}
-
-/**
- * @brief Creates a float array from a variable number of double arguments.
- *        Typically used to package simulation results for return.
- * @param count The number of double arguments to convert and store.
- * @param ... A variable list of double arguments.
- * @return A pointer to a newly allocated float array containing the converted values, or NULL if allocation fails.
- */
-float *stock_data(int count, ...)
-{
-    float *arr = malloc(count * sizeof(float));
-    if (!arr)
-        return NULL;
-    va_list args;
-    va_start(args, count);
-    for (int i = 0; i < count; i++)
+    // Calculate final population counts
+    int final_alive = sim->rabbit_count - sim->free_count;
+    
+    // Populate results structure with collected data
+    results.total_dead = sim->dead_rabbit_count;
+    results.final_alive = final_alive;
+    results.final_males = sim->sex_distribution[1];
+    results.final_females = sim->sex_distribution[0];
+    results.peak_population = peak_population;
+    results.peak_population_month = peak_month;
+    
+    // Only set minimum if we found a valid minimum (not if population started at 0)
+    if (min_population != INT32_MAX && min_population < initial_population_nb)
     {
-        arr[i] = (float)va_arg(args, double);
+        results.min_population = min_population;
+        results.min_population_month = min_month;
     }
-    va_end(args);
-    return arr;
+    else
+    {
+        // If no minimum was found (population only grew), set to initial
+        results.min_population = initial_population_nb;
+        results.min_population_month = 0;
+    }
+    
+    results.total_population_sum = population_sum;
+    results.months_simulated = actual_months;
+    
+    // Calculate sex percentages for final population
+    if (final_alive > 0)
+    {
+        results.male_percentage = (float)results.final_males * 100.0f / final_alive;
+        results.female_percentage = (float)results.final_females * 100.0f / final_alive;
+    }
+    else
+    {
+        // Population extinct - no meaningful percentages
+        results.male_percentage = 0.0f;
+        results.female_percentage = 0.0f;
+    }
+
+    return results;
 }
 
 /**
  * @brief Runs multiple simulations in parallel using OpenMP to calculate average population statistics.
- *        It initializes a separate simulation instance and random number generator for each simulation.
- *        Prints progress updates and final average results.
+ *        Each simulation runs independently with its own random number generator.
+ *        Aggregates results across all simulations and prints comprehensive statistics.
+ * 
  * @param months The number of months for each simulation.
  * @param initial_population_nb The initial number of rabbits for each simulation.
  * @param nb_simulation The total number of simulations to run.
@@ -473,70 +528,129 @@ float *stock_data(int count, ...)
  */
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
 {
-    int total_population = 0, total_dead_rabbits = 0;
-    int sims_done = 0, extinction_month = 0, nb_extinctions = 0, total_nb_males = 0, total_nb_females = 0;
+    // Accumulators for averaging results across all simulations
+    long long total_population = 0;
+    long long total_dead_rabbits = 0;
+    long long total_extinction_month = 0;
+    long long total_males = 0;
+    long long total_females = 0;
+    long long total_peak_population = 0;
+    long long total_peak_month = 0;
+    long long total_min_population = 0;
+    long long total_min_month = 0;
+    long long total_avg_population_sum = 0;
+    
+    int nb_extinctions = 0;
+    int sims_done = 0;
 
-    #pragma omp parallel for reduction(+ : total_population, total_dead_rabbits)
+    // Parallel loop - each iteration runs one simulation on a separate thread
+    #pragma omp parallel for reduction(+ : total_population, total_dead_rabbits, total_extinction_month, nb_extinctions, total_males, total_females, total_peak_population, total_peak_month, total_min_population, total_min_month, total_avg_population_sum)
     for (int i = 0; i < nb_simulation; i++)
     {
+        // Create independent simulation instance and RNG for this thread
         s_simulation_instance sim_instance = {0};
         pcg32_random_t rng;
-        // Seed RNG with base_seed and a unique value for each thread
+        
+        // Seed RNG with base_seed combined with thread number for uniqueness
         pcg32_srandom_r(&rng, base_seed, (uint64_t)omp_get_thread_num());
 
-        float *tab = simulate(&sim_instance, months, initial_population_nb, &rng);
+        // Run single simulation and get results
+        s_simulation_results results = simulate(&sim_instance, months, initial_population_nb, &rng);
 
-        total_dead_rabbits += (int)tab[0];
-        total_population += (int)tab[1];
-        extinction_month += (int)tab[2];
-        nb_extinctions += (int)tab[2] != 0 ? 1 : 0;
-        total_nb_females += (int)tab[3];
-        total_nb_males += (int)tab[4];
+        // Accumulate results for averaging
+        total_dead_rabbits += results.total_dead;
+        total_population += results.final_alive;
+        total_males += results.final_males;
+        total_females += results.final_females;
+        total_peak_population += results.peak_population;
+        total_peak_month += results.peak_population_month;
+        total_min_population += results.min_population;
+        total_min_month += results.min_population_month;
+        
+        // Calculate average population for this simulation
+        if (results.months_simulated > 0)
+        {
+            total_avg_population_sum += (results.total_population_sum / results.months_simulated);
+        }
+        
+        // Track extinction statistics
+        if (results.extinction_month > 0)
+        {
+            total_extinction_month += results.extinction_month;
+            nb_extinctions++;
+        }
 
-        free(tab);
+        // Clean up memory for this simulation
         reset_population(&sim_instance);
 
-        // PROGRESS BAR
-        // Atomically (safely) increment the shared counter.
+        // Progress tracking (thread-safe increment)
         #pragma omp atomic update
         sims_done++;
 
-        // Get the ID of the current thread.
+        // Only master thread prints progress to avoid garbled output
         int thread_id = omp_get_thread_num();
-
-        // Check if this is the master thread (thread 0).
-        // Only this one thread will ever enter the block and print.
-        // This avoids the nesting rule violation and is the standard way to do this.
-        if (PRINT_OUTPUT)
+        if (PRINT_OUTPUT && thread_id == 0)
         {
-            if (thread_id == 0)
-            {
-                float progress = (float)sims_done * 100.0f / nb_simulation;
-
-                LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)", sims_done, nb_simulation, progress);
-
-                fflush(stdout);
-            }
+            float progress = (float)sims_done * 100.0f / nb_simulation;
+            LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)", sims_done, nb_simulation, progress);
+            fflush(stdout);
         }
     }
 
+    // Final progress update showing 100% completion
     LOG_PRINT("\r    Simulations Complete: %3d / %3d (%3.0f%%)\n", nb_simulation, nb_simulation, 100.0f);
 
-    float avg_alive_rabbits = total_population / (float)nb_simulation;
-    float avg_dead_rabbits = total_dead_rabbits / (float)nb_simulation;
-    float avg_extinction_month = extinction_month / (float)nb_extinctions;
-    float avg_males = total_nb_males / (float)nb_simulation;
-    float avg_females = total_nb_females / (float)nb_simulation;
+    // Calculate averages across all simulations
+    float avg_alive_rabbits = (float)total_population / nb_simulation;
+    float avg_dead_rabbits = (float)total_dead_rabbits / nb_simulation;
+    float avg_males = (float)total_males / nb_simulation;
+    float avg_females = (float)total_females / nb_simulation;
+    float avg_peak_population = (float)total_peak_population / nb_simulation;
+    float avg_peak_month = (float)total_peak_month / nb_simulation;
+    float avg_min_population = (float)total_min_population / nb_simulation;
+    float avg_min_month = (float)total_min_month / nb_simulation;
+    float avg_population_over_time = (float)total_avg_population_sum / nb_simulation;
+    
+    // Calculate average extinction month (only for simulations that went extinct)
+    float avg_extinction_month = nb_extinctions > 0 ? (float)total_extinction_month / nb_extinctions : 0;
+    float extinction_rate = (float)nb_extinctions * 100.0f / nb_simulation;
 
+    // Calculate sex percentages from averages
+    float avg_male_percentage = (avg_males + avg_females) > 0 ? 
+                                (avg_males * 100.0f / (avg_males + avg_females)) : 0.0f;
+    float avg_female_percentage = (avg_males + avg_females) > 0 ? 
+                                  (avg_females * 100.0f / (avg_males + avg_females)) : 0.0f;
 
-    char extinction_str[32];
-    if (isnan(avg_extinction_month))
-        snprintf(extinction_str, sizeof(extinction_str), "N/A");
+    // Format extinction string for display
+    char extinction_str[64];
+    if (nb_extinctions == 0)
+        snprintf(extinction_str, sizeof(extinction_str), "no extinctions");
     else
-        snprintf(extinction_str, sizeof(extinction_str), "%.2f", avg_extinction_month);
+        snprintf(extinction_str, sizeof(extinction_str), "%.2f (%.1f%% of simulations)", 
+                 avg_extinction_month, extinction_rate);
 
-
-    printf("\n\n--> the average <--\n    input:\n       start number: %d\n       months : %d\n       number of simulations : %d\n    results:\n       average dead population : %.2f\n"
-           "       average alive rabbits : %.2f\n       average extinction month : %s\n       average male : %.2f\n       average female : %.2f\n",
-           initial_population_nb, months, nb_simulation, avg_dead_rabbits, avg_alive_rabbits, extinction_str, avg_males, avg_females);
+    // Print comprehensive results
+    printf("\n\n"
+           "╔════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                    SIMULATION RESULTS SUMMARY                          ║\n");
+    printf("╠════════════════════════════════════════════════════════════════════════╣\n");
+    printf("║ INPUT PARAMETERS:                                                      ║\n");
+    printf("║   • Initial Population: %-10d                                     ║\n", initial_population_nb);
+    printf("║   • Simulation Duration: %-10d months                             ║\n", months);
+    printf("║   • Number of Simulations: %-10d                                  ║\n", nb_simulation);
+    printf("╠════════════════════════════════════════════════════════════════════════╣\n");
+    printf("║ FINAL POPULATION STATISTICS:                                           ║\n");
+    printf("║   • Average Living Rabbits: %-10.2f                                 ║\n", avg_alive_rabbits);
+    printf("║   • Average Deaths (Total): %-10.2f                                 ║\n", avg_dead_rabbits);
+    printf("║   • Average Males: %-10.2f (%.1f%%)                                  ║\n", avg_males, avg_male_percentage);
+    printf("║   • Average Females: %-10.2f (%.1f%%)                                ║\n", avg_females, avg_female_percentage);
+    printf("╠════════════════════════════════════════════════════════════════════════╣\n");
+    printf("║ POPULATION DYNAMICS:                                                   ║\n");
+    printf("║   • Peak Population: %-10.2f (at month %.1f avg)                    ║\n", avg_peak_population, avg_peak_month);
+    printf("║   • Minimum Population: %-10.2f (at month %.1f avg)               ║\n", avg_min_population, avg_min_month);
+    printf("║   • Average Population Over Time: %-10.2f                           ║\n", avg_population_over_time);
+    printf("╠════════════════════════════════════════════════════════════════════════╣\n");
+    printf("║ EXTINCTION ANALYSIS:                                                   ║\n");
+    printf("║   • Average Extinction Month: %-35s      ║\n", extinction_str);
+    printf("╚════════════════════════════════════════════════════════════════════════╝\n");
 }
