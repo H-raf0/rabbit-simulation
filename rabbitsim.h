@@ -11,6 +11,7 @@
 #include <omp.h>        // For OpenMP parallel programming directives
 #include "pcg_basic.h"  // Include the PCG (Permuted Congruential Generator) library header for random numbers
 #include <math.h>       // For math functions
+#include <string.h>     // For string manipulation functions
 
 // Define initial capacity for rabbit array to avoid frequent reallocations
 #define INIT_RABIT_CAPACITY 1000000 
@@ -23,7 +24,7 @@
 #define ADULT_SRV_RATE 94.6f // Survival rate for adult rabbits
 
 // Macro to control output printing. If PRINT_OUTPUT is non-zero, logs will be printed.
-#define PRINT_OUTPUT 0
+#define PRINT_OUTPUT 1
 
 // Conditional compilation for logging messages.
 // If PRINT_OUTPUT is enabled, LOG_PRINT will call printf and fflush.
@@ -45,7 +46,7 @@ typedef struct rabbit {
     int nb_litters_y;            // Number of litters a female can have per year
     int nb_litters;              // Number of litters a female has had in the current year
     float survival_rate;         // Probability of survival for the current month (e.g., 94.6 for 94.6% chance)
-    int survival_check_flag;     // Flag to indicate if survival has already been checked this month (1 for checked, 0 for not) // Not used currently since i check each month instead of each year so maybe i should remove it later and update the comment related to it
+    int survival_check_flag;     // Flag to indicate if survival has already been checked this month (1 for checked, 0 for not)
 } s_rabbit; // Alias for the rabbit structure
 
 // Structure representing a single simulation instance.
@@ -60,11 +61,28 @@ typedef struct {
 } s_simulation_instance; // Alias for the simulation instance structure
 
 /**
+ * @brief Structure to store population data for a single month.
+ * 
+ * This structure captures a snapshot of the population at a specific point in time,
+ * allowing for temporal analysis and visualization of population dynamics.
+ */
+typedef struct {
+    int month;                   // Month number (0-indexed)
+    int alive;                   // Number of living rabbits
+    int deaths_this_month;       // Number of deaths that occurred this month
+    int births_this_month;       // Number of births that occurred this month
+    int males;                   // Number of male rabbits
+    int females;                 // Number of female rabbits
+    int mature_rabbits;          // Number of mature rabbits (can reproduce)
+    int pregnant_females;        // Number of pregnant female rabbits
+} s_monthly_data;
+
+/**
  * @brief Structure to store comprehensive results from a single simulation run.
  * 
  * This structure captures various statistics about the simulation, including
- * population dynamics, sex distribution, and temporal patterns. It replaces
- * the previous float array approach for better type safety and clarity.
+ * population dynamics, sex distribution, temporal patterns, and monthly snapshots.
+ * It replaces the previous float array approach for better type safety and clarity.
  */
 typedef struct {
     int total_dead;              // Total number of rabbit deaths throughout simulation
@@ -80,6 +98,10 @@ typedef struct {
     int months_simulated;        // Actual number of months simulated (may be less than requested if extinction)
     float male_percentage;       // Percentage of males in final population
     float female_percentage;     // Percentage of females in final population
+    
+    // Monthly tracking data
+    s_monthly_data *monthly_data; // Array of monthly snapshots (dynamically allocated)
+    int monthly_data_count;       // Number of monthly snapshots stored
 } s_simulation_results;
 
 
@@ -115,8 +137,14 @@ int give_birth(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 void check_pregnancy(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_random_t* rng);
 
-void update_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
+void update_rabbits(s_simulation_instance *sim, pcg32_random_t* rng, int *births, int *deaths);
 s_simulation_results simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t* rng);
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed);
+void free_simulation_results(s_simulation_results *results);
+
+// File output functions
+void write_simulation_to_csv(const s_simulation_results *results, const char *filename, int sim_number);
+void write_aggregated_stats_to_csv(int months, int initial_population, int nb_simulations, 
+                                   const s_simulation_results *all_results, const char *filename);
 
 #endif

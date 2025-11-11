@@ -377,15 +377,21 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
 
 /**
  * @brief Iterates through all rabbits in the simulation and updates their states for one month.
- *        This includes aging, checking survival, updating survival rates, checking maturity, handling births, and checking for new pregnancies.
+ *        This includes aging, checking survival, updating survival rates, checking maturity, 
+ *        handling births, and checking for new pregnancies.
  *        Finally, it creates new rabbits born this month.
+ * 
  * @param sim A pointer to the s_simulation_instance.
  * @param rng A pointer to the PCG random number generator state.
+ * @param births Pointer to store the number of births this month (output parameter).
+ * @param deaths Pointer to store the number of deaths this month (output parameter).
  * @return void
  */
-void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
+void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng, int *births, int *deaths)
 {
     int nb_new_born = 0;
+    size_t deaths_before = sim->dead_rabbit_count;
+    
     for (size_t i = 0; i < sim->rabbit_count; ++i)
     {
         if (sim->rabbits[i].status == 0)
@@ -398,25 +404,75 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
         nb_new_born += give_birth(sim, i, rng);
         check_pregnancy(sim, i, rng);
     }
+    
+    // Calculate deaths and births for this month
+    *deaths = sim->dead_rabbit_count - deaths_before;
+    *births = nb_new_born;
+    
     create_new_generation(sim, nb_new_born, rng);
+}
+
+/**
+ * @brief Collects current statistics about the simulation population.
+ *        Counts living rabbits by sex, maturity status, and pregnancy status.
+ * 
+ * @param sim A pointer to the s_simulation_instance.
+ * @param males Pointer to store the count of male rabbits (output parameter).
+ * @param females Pointer to store the count of female rabbits (output parameter).
+ * @param mature Pointer to store the count of mature rabbits (output parameter).
+ * @param pregnant Pointer to store the count of pregnant females (output parameter).
+ * @return void
+ */
+void collect_population_stats(s_simulation_instance *sim, int *males, int *females, 
+                              int *mature, int *pregnant)
+{
+    *males = 0;
+    *females = 0;
+    *mature = 0;
+    *pregnant = 0;
+    
+    for (size_t i = 0; i < sim->rabbit_count; ++i)
+    {
+        if (sim->rabbits[i].status == 0)
+            continue;
+            
+        if (sim->rabbits[i].sex == 1)
+            (*males)++;
+        else
+            (*females)++;
+            
+        if (sim->rabbits[i].mature)
+            (*mature)++;
+            
+        if (sim->rabbits[i].pregnant)
+            (*pregnant)++;
+    }
 }
 
 /**
  * @brief Runs a full simulation of the rabbit population over a specified number of months.
  *        Initializes the population, then iteratively updates rabbit states each month.
  *        Tracks comprehensive statistics including population dynamics, sex distribution,
- *        and temporal patterns (peak/minimum populations).
+ *        temporal patterns (peak/minimum populations), and monthly snapshots.
  * 
  * @param sim A pointer to the s_simulation_instance.
  * @param months The total number of months to simulate.
  * @param initial_population_nb The initial number of rabbits. If 2, "super" rabbits are used.
  * @param rng A pointer to the PCG random number generator state.
- * @return A s_simulation_results struct containing all collected statistics.
+ * @return A s_simulation_results struct containing all collected statistics and monthly data.
  */
 s_simulation_results simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t *rng)
 {
     // Initialize results structure with default values
     s_simulation_results results = {0};
+    
+    // Allocate memory for monthly data tracking
+    results.monthly_data = malloc(sizeof(s_monthly_data) * months);
+    if (!results.monthly_data)
+    {
+        // Memory allocation failed - return empty results
+        return results;
+    }
     
     // Variables to track population statistics during simulation
     int peak_population = 0;
@@ -442,9 +498,23 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
         // Calculate current living population
         int current_alive = sim->rabbit_count - sim->free_count;
         
+        // Collect detailed statistics for this month
+        int males, females, mature, pregnant;
+        collect_population_stats(sim, &males, &females, &mature, &pregnant);
+        
+        // Store monthly snapshot (before updating for this month)
+        results.monthly_data[m].month = m;
+        results.monthly_data[m].alive = current_alive;
+        results.monthly_data[m].males = males;
+        results.monthly_data[m].females = females;
+        results.monthly_data[m].mature_rabbits = mature;
+        results.monthly_data[m].pregnant_females = pregnant;
+        
         // Check for extinction (all rabbits dead)
         if (sim->free_count == sim->rabbit_count)
         {
+            results.monthly_data[m].deaths_this_month = 0;
+            results.monthly_data[m].births_this_month = 0;
             results.extinction_month = m;
             actual_months = m;
             break;
@@ -468,18 +538,27 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
         population_sum += current_alive;
         actual_months = m + 1;
         
-        // Update all rabbits for this month (births, deaths, aging, etc.)
-        update_rabbits(sim, rng);
+        // Update all rabbits for this month and track births/deaths
+        int births, deaths;
+        update_rabbits(sim, rng, &births, &deaths);
+        
+        // Store births and deaths that occurred during this month's update
+        results.monthly_data[m].deaths_this_month = deaths;
+        results.monthly_data[m].births_this_month = births;
     }
 
     // Calculate final population counts
     int final_alive = sim->rabbit_count - sim->free_count;
     
+    // Collect final sex distribution
+    int final_males, final_females, final_mature, final_pregnant;
+    collect_population_stats(sim, &final_males, &final_females, &final_mature, &final_pregnant);
+    
     // Populate results structure with collected data
     results.total_dead = sim->dead_rabbit_count;
     results.final_alive = final_alive;
-    results.final_males = sim->sex_distribution[1];
-    results.final_females = sim->sex_distribution[0];
+    results.final_males = final_males;
+    results.final_females = final_females;
     results.peak_population = peak_population;
     results.peak_population_month = peak_month;
     
@@ -498,6 +577,7 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
     
     results.total_population_sum = population_sum;
     results.months_simulated = actual_months;
+    results.monthly_data_count = actual_months;
     
     // Calculate sex percentages for final population
     if (final_alive > 0)
@@ -516,9 +596,190 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
 }
 
 /**
+ * @brief Frees the dynamically allocated memory in a simulation results structure.
+ * 
+ * @param results A pointer to the s_simulation_results structure to free.
+ * @return void
+ */
+void free_simulation_results(s_simulation_results *results)
+{
+    if (results->monthly_data)
+    {
+        free(results->monthly_data);
+        results->monthly_data = NULL;
+        results->monthly_data_count = 0;
+    }
+}
+
+/**
+ * @brief Writes a single simulation's monthly data to a CSV file.
+ *        Creates a file with detailed month-by-month statistics suitable for plotting.
+ * 
+ * @param results Pointer to the simulation results structure.
+ * @param filename The name of the output CSV file.
+ * @param sim_number The simulation number (for multi-simulation runs).
+ * @return void
+ */
+void write_simulation_to_csv(const s_simulation_results *results, const char *filename, int sim_number)
+{
+    FILE *file = fopen(filename, "w");
+    if (!file)
+    {
+        fprintf(stderr, "Error: Could not open file %s for writing\n", filename);
+        return;
+    }
+    
+    // Write CSV header
+    fprintf(file, "simulation,month,alive,deaths,births,males,females,mature,pregnant\n");
+    
+    // Write monthly data
+    for (int i = 0; i < results->monthly_data_count; ++i)
+    {
+        s_monthly_data *data = &results->monthly_data[i];
+        fprintf(file, "%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+                sim_number,
+                data->month,
+                data->alive,
+                data->deaths_this_month,
+                data->births_this_month,
+                data->males,
+                data->females,
+                data->mature_rabbits,
+                data->pregnant_females);
+    }
+    
+    fclose(file);
+    LOG_PRINT("    Monthly data written to: %s\n", filename);
+}
+
+/**
+ * @brief Writes aggregated statistics from multiple simulations to a CSV file.
+ *        Calculates average population values across all simulations for each month.
+ *        Also writes a summary statistics file with overall averages.
+ * 
+ * @param months The number of months simulated.
+ * @param initial_population The initial population size.
+ * @param nb_simulations The total number of simulations run.
+ * @param all_results Array of all simulation results.
+ * @param filename The name of the output CSV file.
+ * @return void
+ */
+void write_aggregated_stats_to_csv(int months, int initial_population, int nb_simulations, 
+                                   const s_simulation_results *all_results, const char *filename)
+{
+    FILE *file = fopen(filename, "w");
+    if (!file)
+    {
+        fprintf(stderr, "Error: Could not open file %s for writing\n", filename);
+        return;
+    }
+    
+    // Write CSV header for monthly averages
+    fprintf(file, "month,avg_alive,avg_deaths,avg_births,avg_males,avg_females,avg_mature,avg_pregnant,std_alive\n");
+    
+    // For each month, calculate averages across all simulations
+    for (int m = 0; m < months; ++m)
+    {
+        long long sum_alive = 0, sum_deaths = 0, sum_births = 0;
+        long long sum_males = 0, sum_females = 0, sum_mature = 0, sum_pregnant = 0;
+        int valid_sims = 0;
+        
+        // Accumulate values from all simulations for this month
+        for (int s = 0; s < nb_simulations; ++s)
+        {
+            if (m < all_results[s].monthly_data_count)
+            {
+                sum_alive += all_results[s].monthly_data[m].alive;
+                sum_deaths += all_results[s].monthly_data[m].deaths_this_month;
+                sum_births += all_results[s].monthly_data[m].births_this_month;
+                sum_males += all_results[s].monthly_data[m].males;
+                sum_females += all_results[s].monthly_data[m].females;
+                sum_mature += all_results[s].monthly_data[m].mature_rabbits;
+                sum_pregnant += all_results[s].monthly_data[m].pregnant_females;
+                valid_sims++;
+            }
+        }
+        
+        if (valid_sims == 0)
+            break;  // All simulations extinct before this month
+        
+        // Calculate averages
+        float avg_alive = (float)sum_alive / valid_sims;
+        float avg_deaths = (float)sum_deaths / valid_sims;
+        float avg_births = (float)sum_births / valid_sims;
+        float avg_males = (float)sum_males / valid_sims;
+        float avg_females = (float)sum_females / valid_sims;
+        float avg_mature = (float)sum_mature / valid_sims;
+        float avg_pregnant = (float)sum_pregnant / valid_sims;
+        
+        // Calculate standard deviation for population
+        float sum_sq_diff = 0.0f;
+        for (int s = 0; s < nb_simulations; ++s)
+        {
+            if (m < all_results[s].monthly_data_count)
+            {
+                float diff = all_results[s].monthly_data[m].alive - avg_alive;
+                sum_sq_diff += diff * diff;
+            }
+        }
+        float std_alive = sqrtf(sum_sq_diff / valid_sims);
+        
+        // Write monthly averages
+        fprintf(file, "%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+                m, avg_alive, avg_deaths, avg_births, avg_males, avg_females, 
+                avg_mature, avg_pregnant, std_alive);
+    }
+    
+    fclose(file);
+    LOG_PRINT("    Aggregated monthly data written to: %s\n", filename);
+    
+    // Write summary statistics file
+    char summary_filename[256];
+    snprintf(summary_filename, sizeof(summary_filename), "summary_stats.csv");
+    
+    FILE *summary = fopen(summary_filename, "w");
+    if (!summary)
+    {
+        fprintf(stderr, "Error: Could not open file %s for writing\n", summary_filename);
+        return;
+    }
+    
+    // Calculate summary statistics
+    long long total_final_alive = 0, total_final_dead = 0;
+    long long total_peak = 0, total_min = 0;
+    int total_extinctions = 0;
+    
+    for (int s = 0; s < nb_simulations; ++s)
+    {
+        total_final_alive += all_results[s].final_alive;
+        total_final_dead += all_results[s].total_dead;
+        total_peak += all_results[s].peak_population;
+        total_min += all_results[s].min_population;
+        if (all_results[s].extinction_month > 0)
+            total_extinctions++;
+    }
+    
+    // Write summary header and data
+    fprintf(summary, "metric,value\n");
+    fprintf(summary, "initial_population,%d\n", initial_population);
+    fprintf(summary, "months_simulated,%d\n", months);
+    fprintf(summary, "number_of_simulations,%d\n", nb_simulations);
+    fprintf(summary, "avg_final_alive,%.2f\n", (float)total_final_alive / nb_simulations);
+    fprintf(summary, "avg_total_deaths,%.2f\n", (float)total_final_dead / nb_simulations);
+    fprintf(summary, "avg_peak_population,%.2f\n", (float)total_peak / nb_simulations);
+    fprintf(summary, "avg_min_population,%.2f\n", (float)total_min / nb_simulations);
+    fprintf(summary, "extinction_count,%d\n", total_extinctions);
+    fprintf(summary, "extinction_rate,%.2f\n", (float)total_extinctions * 100.0f / nb_simulations);
+    
+    fclose(summary);
+    LOG_PRINT("    Summary statistics written to: %s\n", summary_filename);
+}
+
+/**
  * @brief Runs multiple simulations in parallel using OpenMP to calculate average population statistics.
  *        Each simulation runs independently with its own random number generator.
- *        Aggregates results across all simulations and prints comprehensive statistics.
+ *        Aggregates results across all simulations, prints comprehensive statistics,
+ *        and writes data to CSV files for Python visualization.
  * 
  * @param months The number of months for each simulation.
  * @param initial_population_nb The initial number of rabbits for each simulation.
@@ -528,6 +789,14 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
  */
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
 {
+    // Allocate array to store all simulation results (for CSV export)
+    s_simulation_results *all_results = malloc(sizeof(s_simulation_results) * nb_simulation);
+    if (!all_results)
+    {
+        fprintf(stderr, "Error: Could not allocate memory for simulation results\n");
+        return;
+    }
+    
     // Accumulators for averaging results across all simulations
     long long total_population = 0;
     long long total_dead_rabbits = 0;
@@ -551,11 +820,14 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
         s_simulation_instance sim_instance = {0};
         pcg32_random_t rng;
         
-        // Seed RNG with base_seed combined with thread number for uniqueness
-        pcg32_srandom_r(&rng, base_seed, (uint64_t)omp_get_thread_num());
+        // Seed RNG with base_seed combined with simulation index for uniqueness
+        pcg32_srandom_r(&rng, base_seed, (uint64_t)i);
 
         // Run single simulation and get results
         s_simulation_results results = simulate(&sim_instance, months, initial_population_nb, &rng);
+        
+        // Store results for later CSV export
+        all_results[i] = results;
 
         // Accumulate results for averaging
         total_dead_rabbits += results.total_dead;
@@ -580,7 +852,7 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
             nb_extinctions++;
         }
 
-        // Clean up memory for this simulation
+        // Clean up memory for this simulation (but keep monthly_data for CSV export)
         reset_population(&sim_instance);
 
         // Progress tracking (thread-safe increment)
@@ -629,7 +901,7 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
         snprintf(extinction_str, sizeof(extinction_str), "%.2f (%.1f%% of simulations)", 
                  avg_extinction_month, extinction_rate);
 
-    // Print comprehensive results
+    // Print comprehensive results to console
     printf("\n\n"
            "╔════════════════════════════════════════════════════════════════════════╗\n");
     printf("║                    SIMULATION RESULTS SUMMARY                          ║\n");
@@ -653,4 +925,43 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
     printf("║ EXTINCTION ANALYSIS:                                                   ║\n");
     printf("║   • Average Extinction Month: %-35s      ║\n", extinction_str);
     printf("╚════════════════════════════════════════════════════════════════════════╝\n");
+    /*
+    // Write data to CSV files for Python visualization
+    printf("\n📊 Writing data files for visualization...\n");
+    
+    // Write aggregated monthly data (averages across all simulations)
+    write_aggregated_stats_to_csv(months, initial_population_nb, nb_simulation, 
+                                  all_results, "monthly_averages.csv");
+    
+    // Optionally write individual simulation data (useful for variability analysis)
+    // For large number of simulations, you might want to write only a subset
+    if (nb_simulation <= 10)
+    {
+        for (int i = 0; i < nb_simulation; ++i)
+        {
+            char filename[256];
+            snprintf(filename, sizeof(filename), "simulation_%d.csv", i + 1);
+            write_simulation_to_csv(&all_results[i], filename, i + 1);
+        }
+    }
+    else
+    {
+        // Write first 3 simulations as examples
+        for (int i = 0; i < 3 && i < nb_simulation; ++i)
+        {
+            char filename[256];
+            snprintf(filename, sizeof(filename), "simulation_%d.csv", i + 1);
+            write_simulation_to_csv(&all_results[i], filename, i + 1);
+        }
+        printf("    (Only first 3 individual simulations written - use fewer simulations to export all)\n");
+    }*/
+    
+    // Free all allocated memory for simulation results
+    for (int i = 0; i < nb_simulation; ++i)
+    {
+        free_simulation_results(&all_results[i]);
+    }
+    free(all_results);
+    
+    printf("\n✅ Data export complete! Use the provided Python script to visualize results.\n");
 }

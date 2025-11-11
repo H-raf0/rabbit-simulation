@@ -1,0 +1,10 @@
+metric,value
+initial_population,10000
+months_simulated,1200
+number_of_simulations,100
+avg_final_alive,84.22
+avg_total_deaths,1622458.12
+avg_peak_population,33266.56
+avg_min_population,46.20
+extinction_count,34
+extinction_rate,34.00

@@ -7,7 +7,8 @@
 #include "rabbitsim.h"
 #include "pcg_basic.h"
 
-// NOTE : reducing nummber of simulations running on the same time reduces memory bottleneck
+// NOTE: Reducing number of simulations running at the same time reduces memory bottleneck
+// NOTE: Set PRINT_OUTPUT to 1 in rabbitsim.h to see detailed progress and file generation messages
 
 // Helper function to clear invalid input from stdin
 void clear_input_buffer() {
@@ -21,7 +22,7 @@ int main()
     int user_choice;
 
     int months = 1200;
-    int initial_population = 10000;
+    int initial_population = 1000000;
     int nb_simulations = 100;
     
     uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
@@ -29,10 +30,13 @@ int main()
     int seed_is_custom = 0;
 
     if(!PRINT_OUTPUT){
+        printf("Running simulation in quiet mode...\n");
+        printf("Set PRINT_OUTPUT to 1 in rabbitsim.h for detailed progress.\n\n");
         multi_simulate(months, initial_population, nb_simulations, base_seed);
         return 0;
     }
     printf("Welcome to the Rabbit Simulation\n");
+    printf("Note: CSV files will be generated after simulation completes.\n");
 
     while (!exit_program)
     {
@@ -48,7 +52,7 @@ int main()
         printf("\nWhat do you want to do?\n");
         printf("    1. Change Simulation Parameters\n"
                "    2. Set a Custom Seed\n"
-               "    3. Start Simulation\n"
+               "    3. Start Simulation (generates CSV files)\n"
                "    4. Exit\n"
                "Answer: ");
         
@@ -101,8 +105,10 @@ int main()
 
         case 3:
             printf("--> Starting simulation with the current settings...\n");
+            printf("--> CSV files will be generated for Python visualization.\n");
             multi_simulate(months, initial_population, nb_simulations, base_seed);
             printf("\n\n--> Simulation finished.\n");
+            printf("--> Use 'python visualize_rabbits.py' to generate graphs.\n");
             break;
 
         case 4:
