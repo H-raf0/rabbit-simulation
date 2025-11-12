@@ -20,9 +20,9 @@ int main()
     int exit_program = 0;
     int user_choice;
 
-    int months = 1200;
-    int initial_population = 10000;
-    int nb_simulations = 100;
+    int months = 120;
+    int initial_population = 3;
+    int nb_simulations = 10;
     
     uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
     //uint64_t base_seed = 1234997890123456700ULL;

@@ -446,6 +446,7 @@ void init_monthly_logging(s_simulation_instance *sim, int months)
  * @param month The current month number.
  * @return void
  */
+// TO DO: I already now the number of alive rabbits et the number of males and females, maybe I should just add another for age instead of going through the whole array again
 void record_monthly_stats(s_simulation_instance *sim, int month)
 {
     if (!sim->monthly_data || sim->monthly_data_count >= sim->monthly_data_capacity)
@@ -760,7 +761,7 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
     }
     #endif
 
-    LOG_PRINT("\n\r    Completed Simulations: %3d / %3d (%3.0f%%)", 0, nb_simulation, 100.0f);
+    LOG_PRINT("\n\r    Completed Simulations: %3d / %3d (%3.0f%%)", 0, nb_simulation, 0.0f);
     
     // Parallel loop - each iteration runs one simulation on a separate thread
     #pragma omp parallel for reduction(+ : total_population, total_dead_rabbits, total_extinction_month, nb_extinctions, total_males, total_females, total_peak_population, total_peak_month, total_min_population, total_min_month, total_avg_population_sum)

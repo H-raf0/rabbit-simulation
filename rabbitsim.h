@@ -19,8 +19,8 @@
 // for the long-term stability or extinction of the simulated population.
 // For example, (75.6, 94.6) might lead to a stable population for a period
 // but eventually extinction over a very long time.
-#define INIT_SRV_RATE 75.6f  // Initial survival rate for newborn rabbits
-#define ADULT_SRV_RATE 94.6f // Survival rate for adult rabbits
+#define INIT_SRV_RATE 91.63f  // Initial survival rate for newborn rabbits
+#define ADULT_SRV_RATE 95.83f // Survival rate for adult rabbits
 
 // Macro to control output printing. If PRINT_OUTPUT is non-zero, logs will be printed.
 #define PRINT_OUTPUT 1
