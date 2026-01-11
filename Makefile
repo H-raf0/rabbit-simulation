@@ -1,7 +1,7 @@
 CC = gcc
 # -03 aggressive optimisation, -fopenmp to use <omp.h> (parrallel prossecing)
 CFLAGS = -O3 -fopenmp -Wall -Wextra -std=c11 -g
-LDFLAGS = -lm
+LDFLAGS = -lm -lpthread
 
 SRC = main.c pcg_basic.c rabbitsim.c
 OBJ = $(SRC:.c=.o)

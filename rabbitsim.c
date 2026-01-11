@@ -84,7 +84,7 @@ int generate_random_age(pcg32_random_t *rng){
  * @param sex the sex of the rabbit
  * @return void
  */
-void add_rabbit(s_simulation_instance *sim, int is_mature, float init_srv_rate, int age, int sex)
+void add_rabbit(s_simulation_instance *sim, pcg32_random_t* rng, int is_mature, float init_srv_rate, int age, int sex)
 {
     if (!ensure_capacity(sim))
         return;
@@ -132,10 +132,10 @@ void add_rabbit(s_simulation_instance *sim, int is_mature, float init_srv_rate, 
  * @param sim A pointer to the s_simulation_instance.
  * @return void
  */
-void init_2_super_rabbits(s_simulation_instance *sim)
+void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t* rng)
 {
-    add_rabbit(sim, 1, 100, 9, 0);
-    add_rabbit(sim, 1, 100, 9, 1);
+    add_rabbit(sim, rng, 1, 100, 9, 0);
+    add_rabbit(sim, rng, 1, 100, 9, 1);
 }
 
 /**
@@ -149,7 +149,7 @@ void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_
 {
     for (int i = 0; i < nb_rabbits; ++i)
     {
-        add_rabbit(sim, 1, ADULT_SRV_RATE, generate_random_age(rng), generate_sex(rng));
+        add_rabbit(sim, rng, 1, ADULT_SRV_RATE, generate_random_age(rng), generate_sex(rng));
     }
 }
 
@@ -502,7 +502,7 @@ void create_new_generation(s_simulation_instance *sim, int nb_new_born, pcg32_ra
     
     for (int j = 0; j < nb_new_born; ++j)
     {
-        add_rabbit(sim, 0, INIT_SRV_RATE, 0, generate_sex(rng));
+        add_rabbit(sim, rng, 0, INIT_SRV_RATE, 0, generate_sex(rng));
     }
 }
 
@@ -567,35 +567,33 @@ void init_monthly_logging(s_simulation_instance *sim, int months)
  * @return void
  */
 // TO DO: I already now the number of alive rabbits et the number of males and females, maybe I should just add another for age instead of going through the whole array again
-void record_monthly_stats(s_simulation_instance *sim, int month)
+void record_monthly_stats(s_simulation_instance *sim, int month, int alive_count, int males, int females)
 {
     if (!sim->monthly_data || sim->monthly_data_count >= sim->monthly_data_capacity)
         return;
     
     s_monthly_stats *stats = &sim->monthly_data[sim->monthly_data_count++];
     stats->month = month;
-    stats->males = 0;
-    stats->females = 0;
+    stats->males = males;
+    stats->females = females;
     stats->mature_rabbits = 0;
     stats->pregnant_females = 0;
     stats->births_this_month = sim->births_this_month;
     stats->deaths_this_month = sim->deaths_this_month;
     
     long long age_sum = 0;
-    int alive_count = 0;
+    int min_age = INT_MAX;
+    int max_age = INT_MIN;
     
     for (size_t i = 0; i < sim->rabbit_count; ++i)
     {
         if (sim->rabbits[i].status == 0)
             continue;
             
-        alive_count++;
-        age_sum += sim->rabbits[i].age;
-        
-        if (sim->rabbits[i].sex == 0)
-            stats->females++;
-        else
-            stats->males++;
+        int age = sim->rabbits[i].age;
+        age_sum += age;
+        if (age < min_age) min_age = age;
+        if (age > max_age) max_age = age;
             
         if (sim->rabbits[i].mature)
             stats->mature_rabbits++;
@@ -606,6 +604,8 @@ void record_monthly_stats(s_simulation_instance *sim, int month)
     
     stats->total_alive = alive_count;
     stats->avg_age = alive_count > 0 ? (float)age_sum / alive_count : 0.0f;
+    stats->min_age = (min_age == INT_MAX) ? 0 : min_age;
+    stats->max_age = (max_age == INT_MIN) ? 0 : max_age;
 }
 
 /**
@@ -631,7 +631,7 @@ void write_simulation_log(s_simulation_instance *sim, int sim_number, int initia
     }
     
     // Write CSV header
-    fprintf(fp, "Month,Total_Alive,Males,Females,Male_Percentage,Female_Percentage,Mature_Rabbits,Pregnant_Females,Births,Deaths,Avg_Age\n");
+    fprintf(fp, "Month,Total_Alive,Males,Females,Male_Percentage,Female_Percentage,Mature_Rabbits,Pregnant_Females,Births,Deaths,Avg_Age,Min_Age,Max_Age\n");
     
     // Write data for each month
     for (int i = 0; i < sim->monthly_data_count; ++i)
@@ -640,10 +640,10 @@ void write_simulation_log(s_simulation_instance *sim, int sim_number, int initia
         float male_pct = s->total_alive > 0 ? (float)s->males * 100.0f / s->total_alive : 0.0f;
         float female_pct = s->total_alive > 0 ? (float)s->females * 100.0f / s->total_alive : 0.0f;
         
-        fprintf(fp, "%d,%d,%d,%d,%.2f,%.2f,%d,%d,%d,%d,%.2f\n",
+        fprintf(fp, "%d,%d,%d,%d,%.2f,%.2f,%d,%d,%d,%d,%.2f,%d,%d\n",
                 s->month, s->total_alive, s->males, s->females,
                 male_pct, female_pct, s->mature_rabbits, s->pregnant_females,
-                s->births_this_month, s->deaths_this_month, s->avg_age);
+                s->births_this_month, s->deaths_this_month, s->avg_age, s->min_age, s->max_age);
     }
     
     fclose(fp);
@@ -707,7 +707,7 @@ void write_summary_log(int months, int initial_population, int nb_simulations,
 #else
 // Dummy implementations when logging is disabled
 void init_monthly_logging(s_simulation_instance *sim, int months) { (void)sim; (void)months; }
-void record_monthly_stats(s_simulation_instance *sim, int month) { (void)sim; (void)month; }
+void record_monthly_stats(s_simulation_instance *sim, int month, int alive_count, int males, int females) { (void)sim; (void)month; (void)alive_count; (void)males; (void)females; }
 void write_simulation_log(s_simulation_instance *sim, int sim_number, int initial_population) 
 { 
     (void)sim; (void)sim_number; (void)initial_population; 
@@ -751,7 +751,7 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
     // Initialize starting population based on parameter
     if (initial_population_nb == 2)
     {
-        init_2_super_rabbits(sim);
+        init_2_super_rabbits(sim, rng);
     }
     else
     {
@@ -792,7 +792,7 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
         
         // NEW: Record monthly statistics before updating
         #if defined(ENABLE_DATA_LOGGING) && ENABLE_DATA_LOGGING != 0
-        record_monthly_stats(sim, m);
+        record_monthly_stats(sim, m, current_alive, sim->sex_distribution[1], sim->sex_distribution[0]);
         #endif
         
         // Update all rabbits for this month (births, deaths, aging, etc.)
@@ -1025,6 +1025,3 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
     printf("║   • Average Extinction Month: %-35s      ║\n", extinction_str);
     printf("╚════════════════════════════════════════════════════════════════════════╝\n");
 }
-
-
-// TO DO: multi sim: fix 0.0 not showing up and improve the comment

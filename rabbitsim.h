@@ -4,6 +4,7 @@
 // Standard library includes
 #include <stddef.h>     // For size_t
 #include <stdint.h>     // Required for PCG's uint types like uint32_t, uint64_t
+#include <limits.h>     // For INT_MAX, INT_MIN
 #include <stdio.h>      // For standard input/output functions like printf, fflush
 #include <stdlib.h>     // For general utilities like malloc, realloc, free
 #include <stdarg.h>     // For variable argument lists (va_list, va_start, etc.)
@@ -80,6 +81,8 @@ typedef struct {
     int births_this_month;       // Number of births this month
     int deaths_this_month;       // Number of deaths this month
     float avg_age;               // Average age of living rabbits
+    int min_age;                 // Minimum age of living rabbits
+    int max_age;                 // Maximum age of living rabbits
 } s_monthly_stats;
 
 // Structure representing a single simulation instance.
@@ -134,8 +137,8 @@ int fibonacci(int n);
 double genrand_real(pcg32_random_t* rng);
 
 int ensure_capacity(s_simulation_instance *sim);
-void add_rabbit(s_simulation_instance *sim, int is_mature, float init_srv_rate, int age, int sex);
-void init_2_super_rabbits(s_simulation_instance *sim);
+void add_rabbit(s_simulation_instance *sim, pcg32_random_t* rng, int is_mature, float init_srv_rate, int age, int sex);
+void init_2_super_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
 void init_starting_population(s_simulation_instance *sim, int nb_rabbits, pcg32_random_t* rng);
 void reset_population(s_simulation_instance *sim);
 
@@ -167,7 +170,7 @@ void multi_simulate(int months, int initial_population_nb, int nb_simulation, ui
 
 // NEW: Logging function prototypes
 void init_monthly_logging(s_simulation_instance *sim, int months);
-void record_monthly_stats(s_simulation_instance *sim, int month);
+void record_monthly_stats(s_simulation_instance *sim, int month, int alive_count, int males, int females);
 void write_simulation_log(s_simulation_instance *sim, int sim_number, int initial_population);
 void write_summary_log(int months, int initial_population, int nb_simulations, 
                        s_simulation_results *all_results, uint64_t base_seed);

@@ -151,9 +151,13 @@ def plot_birth_death_rates(simulations, sim_index=0):
     # Average Age
     ax3.plot(df['Month'], df['Avg_Age'], label='Average Age', 
             color='#2E86AB', linewidth=2, alpha=0.8)
+    ax3.plot(df['Month'], df['Min_Age'], label='Min Age', 
+            color='#A23B72', linewidth=1, linestyle='--', alpha=0.7)
+    ax3.plot(df['Month'], df['Max_Age'], label='Max Age', 
+            color='#F18F01', linewidth=1, linestyle='--', alpha=0.7)
     ax3.set_xlabel('Month', fontsize=11, fontweight='bold')
     ax3.set_ylabel('Age (months)', fontsize=11, fontweight='bold')
-    ax3.set_title(f'Simulation {sim_num}: Average Population Age', 
+    ax3.set_title(f'Simulation {sim_num}: Age Statistics', 
                  fontsize=12, fontweight='bold')
     ax3.legend(fontsize=10)
     ax3.grid(True, alpha=0.3)
@@ -261,6 +265,7 @@ def generate_statistics_report(simulations, summary_df):
                 f.write(f"  Total Births: {df['Births'].sum()}\n")
                 f.write(f"  Total Deaths: {df['Deaths'].sum()}\n")
                 f.write(f"  Average Age at End: {df['Avg_Age'].iloc[-1]:.2f} months\n")
+                f.write(f"  Age Range at End: {df['Min_Age'].iloc[-1]} - {df['Max_Age'].iloc[-1]} months\n")
         
         if summary_df is not None:
             f.write(f"\n\n{'='*70}\n")
