@@ -7,6 +7,7 @@
 #include "rabbitsim.h"
 #include "pcg_basic.h"
 
+// NOTE : reducing nummber of simulations running on the same time reduces memory bottleneck
 
 // Helper function to get survival method name
 const char* get_survival_method_name(survival_method_t method) {
@@ -29,9 +30,9 @@ int main()
     int exit_program = 0;
     int user_choice;
 
-    int months = 1200;
-    int initial_population = 10000;
-    int nb_simulations = 100;
+    int months = 120;
+    int initial_population = 3;
+    int nb_simulations = 10;
     
     uint64_t base_seed = (uint64_t)time(NULL) ^ (uintptr_t)&main;
     //uint64_t base_seed = 1234997890123456700ULL;
