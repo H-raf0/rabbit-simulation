@@ -8,6 +8,16 @@
 #include "pcg_basic.h"
 
 
+// Helper function to get survival method name
+const char* get_survival_method_name(survival_method_t method) {
+    switch (method) {
+        case SURVIVAL_STATIC: return "Static (Constant)";
+        case SURVIVAL_GAUSSIAN: return "Gaussian";
+        case SURVIVAL_EXPONENTIAL: return "Exponential";
+        default: return "Unknown";
+    }
+}
+
 // Helper function to clear invalid input from stdin
 void clear_input_buffer() {
     int c;
@@ -43,12 +53,14 @@ int main()
         printf("  - Population: %d\n", initial_population);
         printf("  - Simulations: %d\n", nb_simulations);
         printf("  - Seed: %" PRIu64 " (%s)\n", base_seed, seed_is_custom ? "User-Defined" : "Random");
+        printf("  - Survival Method: %s\n", get_survival_method_name(survival_method));
         
         printf("\nWhat do you want to do?\n");
         printf("    1. Change Simulation Parameters\n"
                "    2. Set a Custom Seed\n"
-               "    3. Start Simulation\n"
-               "    4. Exit\n"
+               "    3. Change Survival Method\n"
+               "    4. Start Simulation\n"
+               "    5. Exit\n"
                "Answer: ");
         
         if (scanf("%d", &user_choice) != 1) {
@@ -99,18 +111,51 @@ int main()
             break;
 
         case 3:
+            printf("Choose survival method:\n");
+            printf("  1. Static (Constant values)\n");
+            printf("  2. Gaussian (Normal distribution)\n");
+            printf("  3. Exponential (Exponential distribution)\n");
+            printf("Enter choice (1-3): ");
+            
+            int method_choice;
+            if (scanf("%d", &method_choice) != 1) {
+                printf("Invalid input. Survival method not changed.\n");
+                clear_input_buffer();
+            } else {
+                clear_input_buffer();
+                switch (method_choice) {
+                    case 1:
+                        survival_method = SURVIVAL_STATIC;
+                        printf("Survival method set to Static.\n");
+                        break;
+                    case 2:
+                        survival_method = SURVIVAL_GAUSSIAN;
+                        printf("Survival method set to Gaussian.\n");
+                        break;
+                    case 3:
+                        survival_method = SURVIVAL_EXPONENTIAL;
+                        printf("Survival method set to Exponential.\n");
+                        break;
+                    default:
+                        printf("Invalid choice. Survival method not changed.\n");
+                        break;
+                }
+            }
+            break;
+
+        case 4:
             printf("--> Starting simulation with the current settings...\n");
             multi_simulate(months, initial_population, nb_simulations, base_seed);
             printf("\n\n--> Simulation finished.\n");
             break;
 
-        case 4:
+        case 5:
             exit_program = 1;
             printf("Exiting simulation. Goodbye!\n");
             break;
 
         default:
-            printf("Invalid answer! Please choose an option from 1 to 4.\n");
+            printf("Invalid answer! Please choose an option from 1 to 5.\n");
             break;
         }
     }

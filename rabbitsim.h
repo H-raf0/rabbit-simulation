@@ -8,8 +8,13 @@
 #include <stdlib.h>     // For general utilities like malloc, realloc, free
 #include <stdarg.h>     // For variable argument lists (va_list, va_start, etc.)
 #include <time.h>       // For time-related functions, often used for seeding random number generators
+#include <math.h>       // For mathematical functions like exp, sqrt
 #include <omp.h>        // For OpenMP parallel programming directives
 #include "pcg_basic.h"  // Include the PCG (Permuted Congruential Generator) library header for random numbers
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 // Define initial capacity for rabbit array to avoid frequent reallocations
 #define INIT_RABIT_CAPACITY 1000000 
@@ -20,6 +25,16 @@
 // but eventually extinction over a very long time.
 #define INIT_SRV_RATE 75.6f  // Initial survival rate for newborn rabbits
 #define ADULT_SRV_RATE 94.6f // Survival rate for adult rabbits
+
+// Survival calculation methods
+typedef enum {
+    SURVIVAL_STATIC,    // Constant values (default)
+    SURVIVAL_GAUSSIAN,  // Gaussian distribution
+    SURVIVAL_EXPONENTIAL // Exponential distribution
+} survival_method_t;
+
+// Global variable to define survival calculation method
+extern survival_method_t survival_method;
 
 // Macro to control output printing. If PRINT_OUTPUT is non-zero, logs will be printed.
 #define PRINT_OUTPUT 0
@@ -81,7 +96,12 @@ void update_maturity(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
 int check_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng);
 void kill_rabbit(s_simulation_instance *sim, size_t i);
 void check_survival(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);
-void update_survival_rate(s_simulation_instance *sim, size_t i);
+void update_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng);
+
+float calculate_base_survival_rate(s_simulation_instance *sim, size_t i);
+float calculate_survival_rate_static(float base_rate);
+float calculate_survival_rate_gaussian(float base_rate, pcg32_random_t *rng);
+float calculate_survival_rate_exponential(float base_rate, pcg32_random_t *rng);
 
 int generate_litters_per_year(pcg32_random_t* rng);
 void update_litters_per_year(s_simulation_instance *sim, size_t i, pcg32_random_t* rng);

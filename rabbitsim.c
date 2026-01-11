@@ -1,6 +1,9 @@
 
 #include "rabbitsim.h" 
 
+// Global variable for survival calculation method
+survival_method_t survival_method = SURVIVAL_STATIC;
+
 
 
 
@@ -106,7 +109,21 @@ void add_rabbit(s_simulation_instance *sim, pcg32_random_t *rng, int is_mature, 
     r->pregnant = 0;
     r->nb_litters_y = 0;
     r->nb_litters = 0;
-    r->survival_rate = init_srv_rate;
+    
+    // Use the selected survival calculation method
+    switch (survival_method)
+    {
+        case SURVIVAL_STATIC:
+            r->survival_rate = calculate_survival_rate_static(init_srv_rate);
+            break;
+        case SURVIVAL_GAUSSIAN:
+            r->survival_rate = calculate_survival_rate_gaussian(init_srv_rate, rng);
+            break;
+        case SURVIVAL_EXPONENTIAL:
+            r->survival_rate = calculate_survival_rate_exponential(init_srv_rate, rng);
+            break;
+    }
+    
     r->survival_check_flag = 0;
 }
 
@@ -241,31 +258,130 @@ void check_survival(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 }
 
 /**
+ * @brief Calculates the base survival rate for a rabbit based on its age and maturity status.
+ * @param sim A pointer to the s_simulation_instance.
+ * @param i The index of the rabbit.
+ * @return The base survival rate.
+ */
+float calculate_base_survival_rate(s_simulation_instance *sim, size_t i)
+{
+    float base_rate;
+    
+    if (!sim->rabbits[i].mature) {
+        // Young rabbits use initial survival rate
+        base_rate = INIT_SRV_RATE;
+    } else {
+        // Mature rabbits use adult survival rate
+        base_rate = ADULT_SRV_RATE;
+    }
+    
+    // Apply age penalty for very old rabbits (120 months and older)
+    if (sim->rabbits[i].age >= 120) {
+        base_rate -= 10 * ((sim->rabbits[i].age - 120) / 12);
+        if (base_rate < 0.0f) base_rate = 0.0f;
+    }
+    
+    return base_rate;
+}
+
+/**
  * @brief Updates the survival rate of a rabbit based on its age and maturity.
  *        Resets the survival check flag monthly.
- *        Decreases survival rate for very old rabbits (120 months or older) and sets to adult rate upon reaching maturity.
+ *        Applies age-based penalties and uses the selected survival calculation method.
  * @param sim A pointer to the s_simulation_instance.
  * @param i The index of the rabbit to update.
+ * @param rng A pointer to the PCG random number generator state.
  * @return void
  */
-void update_survival_rate(s_simulation_instance *sim, size_t i)
+void update_survival_rate(s_simulation_instance *sim, size_t i, pcg32_random_t *rng)
 {
     // monthly 
     sim->rabbits[i].survival_check_flag = 0;
 
-    if (sim->rabbits[i].age % 12 == 0)
+    // Calculate base survival rate based on age and maturity
+    float base_rate = calculate_base_survival_rate(sim, i);
+    
+    // Apply the selected survival calculation method
+    switch (survival_method)
     {
-        // in case i want the change to survive check to be yearly instead of monthly
-        //sim->rabbits[i].survival_check_flag = 0;
-        if (sim->rabbits[i].age >= 120)
-        {
-            sim->rabbits[i].survival_rate -= 10 * ((sim->rabbits[i].age - 120) / 12);
-        }
+        case SURVIVAL_STATIC:
+            // For static method, only update when becoming mature or yearly for old age penalty
+            if (sim->rabbits[i].mature && sim->rabbits[i].age == sim->rabbits[i].maturity_age)
+            {
+                sim->rabbits[i].survival_rate = calculate_survival_rate_static(base_rate);
+            }
+            else if (sim->rabbits[i].age % 12 == 0 && sim->rabbits[i].age >= 120)
+            {
+                // Apply age penalty for very old rabbits
+                sim->rabbits[i].survival_rate = calculate_survival_rate_static(base_rate);
+            }
+            break;
+            
+        case SURVIVAL_GAUSSIAN:
+            // Apply Gaussian variation every month
+            sim->rabbits[i].survival_rate = calculate_survival_rate_gaussian(base_rate, rng);
+            break;
+            
+        case SURVIVAL_EXPONENTIAL:
+            // Apply exponential variation every month
+            sim->rabbits[i].survival_rate = calculate_survival_rate_exponential(base_rate, rng);
+            break;
     }
-    else if (sim->rabbits[i].mature && sim->rabbits[i].age == sim->rabbits[i].maturity_age)
-    {
-        sim->rabbits[i].survival_rate = ADULT_SRV_RATE;
-    }
+}
+
+/**
+ * @brief Calculates survival rate using static (constant) method.
+ * @param base_rate The base survival rate.
+ * @return The calculated survival rate (same as base_rate).
+ */
+float calculate_survival_rate_static(float base_rate)
+{
+    return base_rate;
+}
+
+/**
+ * @brief Calculates survival rate using Gaussian distribution.
+ * @param base_rate The base survival rate (used as mean).
+ * @param rng A pointer to the PCG random number generator state.
+ * @return The calculated survival rate following a normal distribution.
+ */
+float calculate_survival_rate_gaussian(float base_rate, pcg32_random_t *rng)
+{
+    // Box-Muller transform for Gaussian distribution
+    double u1 = genrand_real(rng);
+    double u2 = genrand_real(rng);
+    double z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
+    
+    // Use base_rate as mean, and 5.0 as standard deviation
+    float result = (float)(base_rate + 5.0 * z0);
+    
+    // Clamp to reasonable bounds (0-100)
+    if (result < 0.0f) result = 0.0f;
+    if (result > 100.0f) result = 100.0f;
+    
+    return result;
+}
+
+/**
+ * @brief Calculates survival rate using exponential distribution.
+ * @param base_rate The base survival rate (used as rate parameter).
+ * @param rng A pointer to the PCG random number generator state.
+ * @return The calculated survival rate following an exponential distribution.
+ */
+float calculate_survival_rate_exponential(float base_rate, pcg32_random_t *rng)
+{
+    double u = genrand_real(rng);
+    // Exponential distribution: rate = 1/base_rate, but we want higher base_rate to mean higher survival
+    // So we use: survival = 100 * (1 - exp(-base_rate/100 * random_factor))
+    double lambda = 1.0 / (base_rate / 10.0); // Adjust lambda based on base_rate
+    double result = -log(u) / lambda;
+    
+    // Convert to percentage and clamp
+    result = 100.0 * (1.0 - exp(-result));
+    if (result < 0.0) result = 0.0;
+    if (result > 100.0) result = 100.0;
+    
+    return (float)result;
 }
 
 /**
@@ -396,7 +512,7 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
             continue;
         sim->rabbits[i].age += 1;
         check_survival(sim, i, rng);
-        update_survival_rate(sim, i);
+        update_survival_rate(sim, i, rng);
         update_maturity(sim, i, rng);
         update_litters_per_year(sim, i, rng);
         nb_new_born += give_birth(sim, i, rng);
