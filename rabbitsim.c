@@ -538,7 +538,7 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t *rng)
     create_new_generation(sim, nb_new_born, rng);
 }
 
-// ===== NEW LOGGING FUNCTIONS =====
+// ===== LOGGING FUNCTIONS =====
 
 #if defined(ENABLE_DATA_LOGGING) && ENABLE_DATA_LOGGING != 0
 
@@ -566,7 +566,7 @@ void init_monthly_logging(s_simulation_instance *sim, int months)
  * @param month The current month number.
  * @return void
  */
-// TO DO: I already now the number of alive rabbits et the number of males and females, maybe I should just add another for age instead of going through the whole array again
+// TO DO: I already know the number of alive rabbits et the number of males and females, maybe I should just add another for age instead of going through the whole array again
 void record_monthly_stats(s_simulation_instance *sim, int month, int alive_count, int males, int females)
 {
     if (!sim->monthly_data || sim->monthly_data_count >= sim->monthly_data_capacity)
@@ -720,14 +720,14 @@ void write_summary_log(int months, int initial_population, int nb_simulations,
 }
 #endif
 
-// ===== END NEW LOGGING FUNCTIONS =====
+// ===== END LOGGING FUNCTIONS =====
 
 /**
  * @brief Runs a full simulation of the rabbit population over a specified number of months.
  *        Initializes the population, then iteratively updates rabbit states each month.
  *        Tracks comprehensive statistics including population dynamics, sex distribution,
  *        and temporal patterns (peak/minimum populations).
- *        NEW: Now records monthly statistics if logging is enabled.
+ *        Also records monthly statistics if logging is enabled.
  * 
  * @param sim A pointer to the s_simulation_instance.
  * @param months The total number of months to simulate.
@@ -790,7 +790,7 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
         population_sum += current_alive;
         actual_months = m + 1;
         
-        // NEW: Record monthly statistics before updating
+        // Record monthly statistics before updating
         #if defined(ENABLE_DATA_LOGGING) && ENABLE_DATA_LOGGING != 0
         record_monthly_stats(sim, m, current_alive, sim->sex_distribution[1], sim->sex_distribution[0]);
         #endif
@@ -846,7 +846,7 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
  * @brief Runs multiple simulations in parallel using OpenMP to calculate average population statistics.
  *        Each simulation runs independently with its own random number generator.
  *        Aggregates results across all simulations and prints comprehensive statistics.
- *        NEW: Now logs detailed monthly data for the first MAX_SIMULATIONS_TO_LOG simulations
+ *        Logs detailed monthly data for the first MAX_SIMULATIONS_TO_LOG simulations
  *        and creates a summary file with results from all simulations.
  * 
  * @param months The number of months for each simulation.

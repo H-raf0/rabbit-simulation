@@ -41,10 +41,10 @@ extern survival_method_t survival_method;
 // Macro to control output printing. If PRINT_OUTPUT is non-zero, logs will be printed.
 #define PRINT_OUTPUT 1
 
-// NEW: Macro to control data logging to files
+// Macro to control data logging to files
 #define ENABLE_DATA_LOGGING 1
 
-// NEW: Maximum number of simulations to log detailed monthly data (to avoid huge files)
+// Maximum number of simulations to log detailed monthly data (to avoid huge files)
 #define MAX_SIMULATIONS_TO_LOG 3
 
 // Conditional compilation for logging messages.
@@ -70,7 +70,7 @@ typedef struct rabbit {
     int survival_check_flag;     // Flag to indicate if survival has already been checked this month (1 for checked, 0 for not) // Not used currently since i check each month instead of each year so maybe i should remove it later and update the comment related to it
 } s_rabbit; // Alias for the rabbit structure
 
-// NEW: Structure to store monthly statistics for a single simulation
+// Structure to store monthly statistics for a single simulation
 typedef struct {
     int month;                   // Month number
     int total_alive;             // Total living rabbits
@@ -95,7 +95,7 @@ typedef struct {
     size_t free_count;           // Number of available free slots
     int sex_distribution[2];     // Distribution of the males and the females
     
-    // NEW: Logging-related fields
+    // Logging-related fields
     s_monthly_stats *monthly_data;  // Array to store monthly statistics
     int monthly_data_capacity;      // Allocated capacity for monthly_data
     int monthly_data_count;         // Number of months recorded
@@ -168,7 +168,7 @@ void update_rabbits(s_simulation_instance *sim, pcg32_random_t* rng);
 s_simulation_results simulate(s_simulation_instance *sim, int months, int initial_population_nb, pcg32_random_t* rng);
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed);
 
-// NEW: Logging function prototypes
+// Logging function prototypes
 void init_monthly_logging(s_simulation_instance *sim, int months);
 void record_monthly_stats(s_simulation_instance *sim, int month, int alive_count, int males, int females);
 void write_simulation_log(s_simulation_instance *sim, int sim_number, int initial_population);
