@@ -361,8 +361,8 @@ float calculate_survival_rate_gaussian(float base_rate, pcg32_random_t *rng)
     double u2 = genrand_real(rng);
     double z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
     
-    // Use base_rate as mean, and 5.0 as standard deviation
-    float result = (float)(base_rate + 5.0 * z0);
+    // Use base_rate as mean, and 2.5 as standard deviation (reduced from 5.0 for better stability)
+    float result = (float)(base_rate + 2.5 * z0);
     
     // Clamp to reasonable bounds (0-100)
     if (result < 0.0f) result = 0.0f;
@@ -379,14 +379,20 @@ float calculate_survival_rate_gaussian(float base_rate, pcg32_random_t *rng)
  */
 float calculate_survival_rate_exponential(float base_rate, pcg32_random_t *rng)
 {
-    double u = genrand_real(rng);
-    // Exponential distribution: rate = 1/base_rate, but we want higher base_rate to mean higher survival
-    // So we use: survival = 100 * (1 - exp(-base_rate/100 * random_factor))
-    double lambda = 1.0 / (base_rate / 10.0); // Adjust lambda based on base_rate
-    double result = -log(u) / lambda;
+    // Use exponential distribution centered around base_rate
+    // Scale base_rate to (0, 1) range for lambda calculation
+    double normalized_rate = base_rate / 100.0;
     
-    // Convert to percentage and clamp
-    result = 100.0 * (1.0 - exp(-result));
+    // lambda determines the decay rate: higher base_rate = higher lambda = more survival concentration
+    double lambda = -log(1.0 - normalized_rate) / 2.0;  // Scale factor of 2 for variance control
+    
+    double u = genrand_real(rng);
+    double random_factor = -log(u) / lambda;  // Exponential random variable
+    
+    // Result is base_rate modulated by exponential factor
+    double result = base_rate * (1.0 + 0.3 * (random_factor - 1.0));  // Keep variation within ~30%
+    
+    // Clamp to valid percentage range
     if (result < 0.0) result = 0.0;
     if (result > 100.0) result = 100.0;
     
@@ -857,6 +863,9 @@ s_simulation_results simulate(s_simulation_instance *sim, int months, int initia
  */
 void multi_simulate(int months, int initial_population_nb, int nb_simulation, uint64_t base_seed)
 {
+    // Set the number of threads to use for OpenMP
+    omp_set_num_threads(NUM_THREADS);
+    
     // Accumulators for averaging results across all simulations
     long long total_population = 0;
     long long total_dead_rabbits = 0;

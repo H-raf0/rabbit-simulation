@@ -283,7 +283,7 @@ for (int i = 0; i < nb_simulation; i++) {
 int ensure_capacity(s_simulation_instance *sim) {
     if (sim->rabbit_count < sim->rabbit_capacity)
         return 1;
-    size_t new_capacity = (capacity == 0) ? INIT_CAPACITY : capacity * 2;
+    size_t new_capacity = (capacity == 0) ? INIT_CAPACITY : capacity * 1.3;
     rabbits = realloc(rabbits, sizeof(s_rabbit) * new_capacity);
     free_indices = realloc(free_indices, sizeof(int) * new_capacity);
     sim->rabbit_capacity = new_capacity;

@@ -11,7 +11,7 @@ fi
 PROGRAM="$1"
 shift
 ARGS="$@"
-
+sudo ./boost_task.sh ./sim
 # ---- CONFIGURATION ----
 # Number of CPU cores to use (all cores by default)
 CORES=$(nproc)

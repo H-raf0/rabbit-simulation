@@ -20,4 +20,3 @@ clean:
 	rm -f $(OBJ) $(EXEC)
 	rm -f *.csv
 	rm -f *.png
-	rm -f simulation_report.txt

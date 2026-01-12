@@ -21,6 +21,10 @@
 // Define initial capacity for rabbit array to avoid frequent reallocations
 #define INIT_RABIT_CAPACITY 1000000 
 
+// Number of CPU cores to use for parallel simulations
+// NOTE : reducing nummber of simulations running on the same time reduces memory bottleneck
+#define NUM_THREADS 1
+
 // Survival rates for rabbits at different life stages. These values are crucial
 // for the long-term stability or extinction of the simulated population.
 // For example, (75.6, 94.6) might lead to a stable population for a period

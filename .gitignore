@@ -11,3 +11,9 @@ sim.exe
 sim
 pcg_basic.o
 *.o
+ANALYSIS_GUIDE.md
+DELIVERY_SUMMARY.md
+QUICK_REFERENCE.py
+README_ANALYSIS.md
+SETUP_SUMMARY.md
+__pycache__
