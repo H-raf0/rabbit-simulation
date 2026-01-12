@@ -1,0 +1,589 @@
+\documentclass[12pt,a4paper]{article}
+
+% Packages essentiels
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+
+% Style des listings de code
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    language=C,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    showstringspaces=false
+}
+
+% Configuration hyperref
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdftitle={Simulation de Population de Lapins - Documentation Technique},
+    pdfauthor={},
+    bookmarks=true,
+}
+
+% En-tête/Pied de page
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Simulation de Population de Lapins}
+\lhead{\leftmark}
+\cfoot{\thepage}
+
+% Formatage des titres
+\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+
+% Début du document
+\begin{document}
+
+% Page de titre
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Huge\bfseries Dynamique Stochastique de Population de Lapins\par}
+    \vspace{0.5cm}
+    {\Large Documentation Technique Complète\par}
+    \vspace{2cm}
+    
+    {\Large\itshape Analyse de Simulation Monte Carlo\par}
+    \vspace{3cm}
+    
+    {\large \today\par}
+    
+    \vfill
+    
+    {\large Une implémentation C multi-thread avec analyse statistique\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% Résumé
+\begin{abstract}
+Ce document présente une analyse technique complète d'une simulation stochastique de population de lapins implémentée en C. La simulation utilise des méthodes Monte Carlo pour modéliser la dynamique de population basée sur des paramètres biologiques probabilistes incluant les taux de survie, la capacité de reproduction et la mortalité dépendante de l'âge. L'implémentation comporte une exécution parallèle utilisant OpenMP, une gestion efficace de la mémoire par recyclage d'indices, et plusieurs méthodes de calcul du taux de survie (statique, gaussienne et exponentielle). Nous analysons les trajectoires de population à travers plusieurs simulations, examinant les schémas de croissance, les événements d'extinction, la dynamique de distribution des sexes et l'évolution de la structure démographique sur des périodes allant jusqu'à 120 mois.
+\end{abstract}
+
+\newpage
+
+\section{Introduction}
+
+\subsection{Vue d'ensemble du projet}
+Ce projet implémente une simulation stochastique sophistiquée basée sur les agents de la dynamique de population de lapins. Chaque lapin est modélisé comme un agent indépendant avec des caractéristiques individualisées incluant l'âge, le sexe, le statut de maturité, la capacité de reproduction et la probabilité de survie. La simulation suit l'évolution de la population sur plusieurs générations, tenant compte des naissances, décès, vieillissement et reproduction sous des règles probabilistes reflétant la réalité biologique.
+
+\subsection{Caractéristiques principales}
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Simulation multi-agents} : Modélisation individuelle avec agents hétérogènes
+    \item \textbf{Modélisation stochastique} : Génération de nombres aléatoires PCG pour la reproductibilité
+    \item \textbf{Exécution parallèle} : Exécutions multi-simulations basées sur OpenMP
+    \item \textbf{Modèles de survie multiples} : Taux de mortalité statiques, gaussiens et exponentiels
+    \item \textbf{Journalisation complète} : Statistiques mensuelles et résumés agrégés
+    \item \textbf{Optimisation des performances} : Contrôle du gouverneur CPU et priorisation des processus
+\end{itemize}
+
+\subsection{Fondements du modèle biologique}
+La simulation est ancrée dans la théorie de la dynamique des populations écologiques, incorporant :
+\begin{itemize}
+    \item Modélisation de population structurée par âge
+    \item Processus stochastiques de naissance-décès
+    \item Croissance indépendante de la densité (implémentation actuelle)
+    \item Variation individuelle dans les traits d'histoire de vie
+\end{itemize}
+
+\newpage
+
+\section{Architecture et Structures de Données}
+
+\subsection{Structure de données centrale : \texttt{s\_rabbit}}
+
+L'unité fondamentale de la simulation est la structure lapin, optimisée pour l'efficacité mémoire et la localité du cache :
+
+\begin{lstlisting}[language=C]
+typedef struct rabbit {
+    int sex;                  // 0: femelle, 1: mâle
+    int status;               // 0: mort, 1: vivant
+    int age;                  // Âge en mois
+    int mature;               // Maturité sexuelle atteinte
+    int maturity_age;         // Âge à la maturité
+    int pregnant;             // État de gestation (femelles)
+    int nb_litters_y;         // Portées par an (capacité)
+    int nb_litters;           // Portées de l'année en cours
+    float survival_rate;      // Probabilité de survie mensuelle (%)
+    int survival_check_flag;  // Indicateur de vérification mensuelle
+} s_rabbit;
+\end{lstlisting}
+
+\textbf{Justification de la conception :}
+\begin{itemize}
+    \item Empreinte mémoire : $\sim$40 octets par lapin (alignement inclus)
+    \item Le motif d'accès séquentiel optimise l'utilisation du cache L1/L2
+    \item La vérification basée sur un indicateur évite les évaluations mensuelles en double
+\end{itemize}
+
+\subsection{Structure d'instance de simulation}
+
+La structure \texttt{s\_simulation\_instance} gère l'état complet de la population :
+
+\begin{lstlisting}[language=C]
+typedef struct {
+    s_rabbit *rabbits;           // Tableau dynamique
+    size_t rabbit_count;         // Total (vivants + morts)
+    size_t dead_rabbit_count;    // Décès cumulés
+    size_t rabbit_capacity;      // Capacité allouée
+    int *free_indices;           // Pool d'emplacements réutilisables
+    size_t free_count;           // Taille du pool
+    int sex_distribution[2];     // [femelles, mâles]
+    s_monthly_stats *monthly_data;
+    // ... champs de journalisation
+} s_simulation_instance;
+\end{lstlisting}
+
+\textbf{Stratégie de gestion mémoire :}
+\begin{enumerate}
+    \item \textbf{Recyclage d'indices} : Les emplacements de lapins morts sont réutilisés via \texttt{free\_indices}
+    \item \textbf{Croissance exponentielle} : La capacité double lorsqu'elle est dépassée
+    \item \textbf{Capacité initiale} : 1 000 000 d'emplacements ($\sim$40 Mo par simulation)
+    \item \textbf{Insertion amortie} : Complexité temporelle moyenne de $O(1)$
+\end{enumerate}
+
+\textbf{Compromis de performance :}
+\begin{itemize}
+    \item[$+$] Pas de fragmentation mémoire
+    \item[$+$] Réutilisation d'emplacements en $O(1)$
+    \item[$-$] Itération sur tous les emplacements ($O(n_{\text{total}})$ au lieu de $O(n_{\text{vivants}})$)
+\end{itemize}
+
+\newpage
+
+\section{Modèle Biologique}
+
+\subsection{Paramètres de survie}
+
+La simulation définit deux taux de survie critiques qui régissent la stabilité à long terme de la population :
+
+\begin{equation}
+\begin{aligned}
+r_{\text{init}} &= 91{,}63\% \quad \text{(nouveau-nés)} \\
+r_{\text{adult}} &= 95{,}83\% \quad \text{(lapins matures)}
+\end{aligned}
+\end{equation}
+
+Ces valeurs représentent des probabilités de survie mensuelles et ont été calibrées empiriquement :
+\begin{itemize}
+    \item $r > 96\%$ : Croissance exponentielle illimitée
+    \item $r < 90\%$ : Extinction rapide
+    \item Valeurs actuelles : Population stable avec fluctuations naturelles
+\end{itemize}
+
+\subsection{Méthodes de calcul de la survie}
+
+\subsubsection{Méthode statique (par défaut)}
+Taux de survie déterministes (avec graine fixée) :
+\begin{equation}
+S(t) = r_{\text{base}}
+\end{equation}
+
+Représente des conditions environnementales stables sans variation temporelle.
+
+\subsubsection{Méthode gaussienne}
+Modélise les fluctuations saisonnières et environnementales en utilisant une distribution normale :
+\begin{equation}
+S(t) = \text{limite}\left(r_{\text{base}} + \sigma \cdot Z, 0, 100\right)
+\end{equation}
+où $Z \sim \mathcal{N}(0,1)$ via la transformation de Box-Muller, $\sigma = 5\%$.
+
+\begin{lstlisting}[language=C]
+float calculate_survival_rate_gaussian(float base_rate, 
+                                        pcg32_random_t *rng) {
+    double u1 = genrand_real(rng);
+    double u2 = genrand_real(rng);
+    double z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
+    float result = base_rate + 5.0 * z0;
+    return clamp(result, 0.0f, 100.0f);
+}
+\end{lstlisting}
+
+\subsubsection{Méthode exponentielle}
+Modélise les événements catastrophiques (épidémies, prédation) :
+\begin{equation}
+S(t) = 100 \cdot \left(1 - e^{-X}\right), \quad X \sim \text{Exp}(\lambda)
+\end{equation}
+où $\lambda = \frac{10}{r_{\text{base}}}$.
+
+La distribution à queue lourde capture les événements de mortalité rares mais sévères.
+
+\subsection{Maturité sexuelle}
+
+La maturité est atteinte de manière probabiliste à partir de 5 mois :
+\begin{equation}
+P(\text{mature} \mid \text{âge} = a) = \begin{cases}
+0 & a < 5 \\
+\frac{a}{8} & 5 \leq a < 8 \\
+1 & a \geq 8
+\end{cases}
+\end{equation}
+
+Ce modèle progressif reflète la variation individuelle dans les taux de développement.
+
+\subsection{Reproduction}
+
+\subsubsection{Fréquence des portées}
+La capacité annuelle de portées suit une distribution discrète empirique :
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cc}
+\toprule
+Portées/an & Probabilité \\
+\midrule
+3 & 5\% \\
+4 & 10\% \\
+5 & 25\% \\
+6 & 30\% \\
+7 & 20\% \\
+8 & 7\% \\
+9 & 3\% \\
+\bottomrule
+\end{tabular}
+\caption{Distribution de la capacité de reproduction annuelle}
+\end{table}
+
+\subsubsection{Taille des portées}
+Distribuée uniformément entre 3 et 6 petits :
+\begin{equation}
+N_{\text{petits}} \sim \text{Uniforme}\{3, 4, 5, 6\}
+\end{equation}
+
+\subsubsection{Timing de la gestation}
+Une probabilité adaptative assure que les portées sont distribuées tout au long de l'année :
+\begin{equation}
+P(\text{gestante} \mid \text{mois } m) = \frac{L_{\text{restantes}}}{M_{\text{restants}}}
+\end{equation}
+où $L_{\text{restantes}}$ = portées restantes, $M_{\text{restants}}$ = mois restants dans l'année.
+
+\subsection{Sénescence}
+
+Pénalité de mortalité dépendante de l'âge pour les lapins dépassant 10 ans (120 mois) :
+\begin{equation}
+r(a) = r_{\text{base}} - 10\% \cdot \left\lfloor \frac{a - 120}{12} \right\rfloor
+\end{equation}
+
+Ceci limite la durée de vie et prévient une longévité irréaliste.
+
+\newpage
+
+\section{Détails d'implémentation}
+
+\subsection{Génération de nombres aléatoires : PCG}
+
+La simulation utilise le générateur congruentiel permuté (PCG) au lieu de Mersenne Twister pour plusieurs avantages :
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Critère} & \textbf{PCG} & \textbf{MT19937} \\
+\midrule
+Vitesse & Très rapide & Modérée \\
+Qualité statistique & Excellente & Excellente \\
+Taille d'état & 16 octets & 2,5 Ko \\
+Thread-safe & Oui (par instance) & Non (état global) \\
+Période & $2^{64}$ & $2^{19937}$ \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison des générateurs de nombres aléatoires}
+\end{table}
+
+\textbf{Avantages du PCG pour cette application :}
+\begin{itemize}
+    \item Empreinte mémoire minimale par thread
+    \item Instances locales aux threads pour la parallélisation OpenMP
+    \item Période suffisante pour les simulations Monte Carlo
+    \item Performance supérieure dans les boucles serrées
+\end{itemize}
+
+\subsection{Parallélisation OpenMP}
+
+Plusieurs simulations indépendantes s'exécutent en parallèle :
+
+\begin{lstlisting}[language=C]
+#pragma omp parallel for reduction(+:total_population, ...)
+for (int i = 0; i < nb_simulation; i++) {
+    pcg32_random_t rng;
+    pcg32_srandom_r(&rng, base_seed, (uint64_t)i);
+    // Simulation indépendante avec graine unique
+}
+\end{lstlisting}
+
+\textbf{Caractéristiques de performance :}
+\begin{itemize}
+    \item Accélération quasi-linéaire (les simulations sont indépendantes)
+    \item 8 threads $\approx$ exécution 8× plus rapide
+    \item La bande passante mémoire devient le facteur limitant avec de nombreux threads
+\end{itemize}
+
+\subsection{Gestion de la mémoire}
+
+\subsubsection{Stratégie de croissance de capacité}
+\begin{lstlisting}[language=C]
+int ensure_capacity(s_simulation_instance *sim) {
+    if (sim->rabbit_count < sim->rabbit_capacity)
+        return 1;
+    size_t new_capacity = capacity * 1.3;
+    // Réallocation...
+}
+\end{lstlisting}
+
+Le facteur de croissance de 30\% fournit :
+\begin{itemize}
+    \item Temps d'insertion amorti de $O(1)$
+    \item Moins de réallocations que le doublement
+    \item Gaspillage mémoire réduit comparé à une croissance agressive
+\end{itemize}
+
+\subsection{Cycle de mise à jour mensuel}
+
+Ordre critique des opérations chaque mois :
+
+\begin{enumerate}
+    \item \textbf{Incrémentation de l'âge} : Tous les lapins vivants vieillissent de 1 mois
+    \item \textbf{Vérification de survie} : Détermination probabiliste du décès
+    \item \textbf{Mise à jour du taux de survie} : Recalcul basé sur l'âge/méthode
+    \item \textbf{Vérification de maturité} : Les jeunes lapins peuvent devenir matures
+    \item \textbf{Traitement des naissances} : Les femelles gestantes donnent naissance (du mois précédent)
+    \item \textbf{Vérification de gestation} : Les femelles éligibles peuvent devenir gestantes
+    \item \textbf{Création de nouvelle génération} : Ajout des petits à la population
+\end{enumerate}
+
+Cet ordre assure la cohérence temporelle (par ex., pas de naissances posthumes).
+
+\newpage
+
+\section{Optimisation des performances}
+
+\subsection{Options du compilateur}
+
+\begin{lstlisting}[language=bash]
+CFLAGS = -O3 -fopenmp -Wall -Wextra -std=c11 -g
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{-O3} : Optimisation agressive (accélération de 2-3×)
+    \begin{itemize}
+        \item Inline de fonctions
+        \item Déroulement de boucles
+        \item Vectorisation SIMD
+    \end{itemize}
+    \item \texttt{-fopenmp} : Active les directives OpenMP
+    \item \texttt{-Wall -Wextra} : Avertissements complets
+    \item \texttt{-std=c11} : Standard C moderne
+    \item \texttt{-g} : Symboles de débogage (profilage, aucun impact sur les performances)
+\end{itemize}
+
+\subsection{Optimisation au niveau système : \texttt{boost\_task.sh}}
+
+Le script fourni maximise les performances CPU :
+
+\begin{lstlisting}[language=bash]
+# Gouverneur CPU : fréquence maximale
+echo performance > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+
+# Priorité du processus
+nice -n -10  # Priorité CPU plus élevée
+ionice -c 1 -n 0  # Priorité E/S temps réel
+
+# Affinité CPU
+taskset -c 0-$((CORES-1))  # Lier à tous les cœurs
+\end{lstlisting}
+
+\textbf{Impact sur les performances :}
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Optimisation} & \textbf{Gain typique} & \textbf{Mécanisme} \\
+\midrule
+Gouverneur performance & 20-30\% & Élimine la latence de changement de fréquence \\
+Priorité Nice & 5-10\% & Réduit les changements de contexte \\
+Affinité CPU & 10-15\% & Améliore la localité du cache L2/L3 \\
+\textbf{Total} & \textbf{35-55\%} & \textbf{Effet combiné} \\
+\bottomrule
+\end{tabular}
+\caption{Améliorations de performance estimées des optimisations système}
+\end{table}
+
+\subsection{Optimisations supplémentaires potentielles}
+
+\subsubsection{Structure-de-Tableaux (SoA)}
+Le Tableau-de-Structures (AoS) actuel pourrait être converti :
+
+\begin{lstlisting}[language=C]
+// Actuel : AoS
+s_rabbit rabbits[1000000];  // Champs entrelacés
+
+// Proposé : SoA
+int ages[1000000];
+int sexes[1000000];
+int statuses[1000000];
+\end{lstlisting}
+
+\textbf{Avantages :} Meilleure vectorisation SIMD, utilisation améliorée des lignes de cache \\
+\textbf{Coût :} Complexité accrue du code
+
+\subsubsection{Liste chaînée des lapins vivants}
+Ajouter des pointeurs next-alive pour itérer uniquement sur les lapins vivants :
+\begin{itemize}
+    \item Actuel : Itération $O(n_{\text{total}})$
+    \item Proposé : Itération $O(n_{\text{vivants}})$
+    \item Accélération significative quand la population décline
+\end{itemize}
+
+\newpage
+
+\section{Résultats de simulation et analyse}
+
+Cette section présente une analyse complète de la dynamique de population à travers plusieurs simulations, examinant les schémas de croissance, la structure démographique et les événements d'extinction.
+
+\subsection{Trajectoire de population au fil du temps}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{01_population_over_time.png}
+\caption{Évolution de la population à travers trois simulations indépendantes sur 80 mois}
+\label{fig:pop_time}
+\end{figure}
+
+\textbf{Observations clés :}
+\begin{itemize}
+    \item \textbf{Phase de latence initiale (Mois 0-20) :} Partant de seulement 3 lapins, la population nécessite plusieurs générations pour construire une capacité de reproduction. La petite taille initiale crée une variance stochastique élevée.
+    
+    \item \textbf{Phase de croissance exponentielle (Mois 20-50) :} Une fois qu'il existe suffisamment de femelles reproductrices, la population entre dans une croissance exponentielle rapide. Le temps de doublement durant cette phase est d'environ 6-8 mois.
+    
+    \item \textbf{Plateau et oscillation (Mois 50+) :} La population se stabilise autour de 3000-5000 individus avec des oscillations caractéristiques. Ces fluctuations résultent probablement de :
+    \begin{itemize}
+        \item Effets de cohorte (vieillissement synchronisé de grandes cohortes de naissance)
+        \item Variation stochastique dans les taux de naissance/décès
+        \item Rétroaction retardée entre potentiel reproductif et mortalité
+    \end{itemize}
+    
+    \item \textbf{Variabilité inter-simulations :} Les trois trajectoires montrent des schémas qualitativement similaires mais une divergence quantitative, démontrant la nature stochastique du modèle.
+\end{itemize}
+
+\textbf{Interprétation théorique :} La courbe de croissance en forme de sigmoïde ressemble à une croissance logistique, mais sans régulation explicite dépendante de la densité.
+
+\subsection{Dynamique du taux de croissance de la population}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{02_growth_rate_over_time.png}
+\caption{Taux de croissance mensuel de la population (variation en pourcentage par rapport au mois précédent)}
+\label{fig:growth_rate}
+\end{figure}
+
+\textbf{Analyse :}
+\begin{itemize}
+    \item \textbf{Volatilité précoce extrême :} Les taux de croissance de $\pm$100-200\% dans les premiers mois reflètent les petits dénominateurs de population. Un seul décès ou naissance change considérablement le pourcentage.
+    
+    \item \textbf{Pic de croissance (Mois 20) :} Le taux de croissance soutenu maximal de $\sim$20-30\% par mois se produit pendant la phase exponentielle.
+    
+    \item \textbf{Convergence vers l'équilibre :} Au mois 50, le taux de croissance oscille autour de zéro avec une amplitude de $\pm$5-10\%.
+\end{itemize}
+
+\subsection{Distribution des sexes et structure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{04_population_structure.png}
+\caption{Distribution des sexes au fil du temps (gauche) et ratio final des sexes (droite) pour trois simulations}
+\label{fig:sex_dist}
+\end{figure}
+
+\textbf{Conclusions principales :}
+\begin{itemize}
+    \item \textbf{Déséquilibre précoce du ratio des sexes :} Avec une population initiale de 3, l'attribution aléatoire du sexe crée un fort déséquilibre précoce. Cependant, cela s'équilibre rapidement grâce à la probabilité de naissance de 50\% pour chaque sexe.
+    
+    \item \textbf{Convergence vers 50:50 :} Au mois 30, les ratios mâles-femelles se stabilisent autour de 50\%:50\% dans toutes les simulations.
+    
+    \item \textbf{Distributions finales :} Les diagrammes circulaires confirment des ratios de sexes remarquablement équilibrés (plage 49-51\%) à travers toutes les simulations.
+\end{itemize}
+
+\subsection{Naissances, décès et croissance nette}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{05_births_vs_deaths.png}
+\caption{Naissances et décès mensuels (gauche) et changement net de population (droite)}
+\label{fig:births_deaths}
+\end{figure}
+
+\textbf{Analyse détaillée :}
+
+\textbf{Panneau gauche - Naissances et décès au fil du temps :}
+\begin{itemize}
+    \item \textbf{Relation d'échelle :} Les naissances et les décès évoluent proportionnellement à la taille de la population, comme prévu. À l'équilibre ($N \approx 3500$), naissances $\approx$ 400-600/mois, décès $\approx$ 300-500/mois.
+    
+    \item \textbf{Estimation du taux de natalité :} Taux de natalité par habitant $b \approx \frac{500}{3500} \approx 14\%$ par mois, soit $\approx$170\% par an.
+    
+    \item \textbf{Estimation du taux de mortalité :} Taux de mortalité par habitant $d \approx \frac{400}{3500} \approx 11\%$ par mois.
+\end{itemize}
+
+\textbf{Panneau droit - Changement net de population :}
+\begin{itemize}
+    \item \textbf{Dominance de croissance positive (Mois 10-50) :} Les barres vertes dominent pendant la phase de croissance exponentielle, avec des ajouts nets de 200-400 lapins par mois.
+    
+    \item \textbf{Oscillation d'équilibre (Mois 50+) :} Les barres alternent entre positives (vertes) et négatives (rouges), avec une magnitude de $\pm$50-150 lapins.
+\end{itemize}
+
+\subsection{Résultats d'extinction à travers les simulations}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{08_extinction_outcomes.png}
+\caption{Taille finale de la population (gauche) et timing de survie vs extinction (droite) à travers plusieurs simulations}
+\label{fig:extinction}
+\end{figure}
+
+\textbf{Interprétation :}
+
+\textbf{Panneau gauche - Distribution de la population finale :}
+\begin{itemize}
+    \item \textbf{Simulations réussies :} Les simulations \#1-3 montrent des populations finales saines de 3000-5000 lapins, cohérentes avec un équilibre stable.
+    
+    \item \textbf{Simulations éteintes :} La simulation \#2 montre une population finale nulle, indiquant qu'une extinction s'est produite durant la fenêtre de 80 mois.
+\end{itemize}
+
+\textbf{Panneau droit - Timing de survie vs extinction :}
+\begin{itemize}
+    \item \textbf{Barres vertes (survivants) :} S'étendent jusqu'au mois 80, indiquant que ces populations ont survécu toute la durée de simulation.
+    
+    \item \textbf{Barre rouge (éteint) :} La simulation \#2 s'est éteinte vers le mois 60-65. Cette extinction tardive est notable—elle suggère que la population a établi un équilibre temporaire avant de subir un effondrement catastrophique.
+\end{itemize}
+
+\textbf{Estimation de la probabilité d'extinction :} Avec 1/5 simulations montrant une extinction (20\%), le modèle suggère un risque d'extinction non négligeable même après stabilisation apparente.
+
+\newpage
+
+\section{Résumé statistique et discussion}
+
+\subsection{Résultats de simulation typiques}
