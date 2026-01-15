@@ -31,7 +31,7 @@ int fibonacci(int n)
 
 /**
  * @brief Ensures that the simulation instance has enough capacity to add more rabbits.
- *        If not, it reallocates memory for the rabbits and free_indices arrays to double the current capacity.
+ *        If not, it reallocates memory for the rabbits and free_indices arrays to increase the current capacity.
  * @param sim A pointer to the s_simulation_instance.
  * @return 1 if the capacity is sufficient or successfully increased, 0 otherwise.
  */
@@ -39,7 +39,7 @@ int ensure_capacity(s_simulation_instance *sim)
 {
     if (sim->rabbit_count < sim->rabbit_capacity)
         return 1;
-    size_t new_capacity = (sim->rabbit_capacity == 0) ? INIT_RABIT_CAPACITY : sim->rabbit_capacity * 2;
+    size_t new_capacity = (sim->rabbit_capacity == 0) ? INIT_RABIT_CAPACITY : sim->rabbit_capacity * 1.3;
 
     s_rabbit *temp_rabbits = realloc(sim->rabbits, sizeof(s_rabbit) * new_capacity);
     if (!temp_rabbits)
